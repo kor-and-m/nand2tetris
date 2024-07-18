@@ -1,0 +1,8 @@
+[package]
+name = "hack_ast"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+hack_macro = { path = "../hack_macro" }
+symbolic = { path = "../symbolic" }
