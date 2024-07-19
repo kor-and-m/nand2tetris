@@ -17,7 +17,6 @@ pub struct VMLexer {
     is_eof: bool,
     src_line: usize,
     instruction_number: usize,
-    src_file_name: String,
     is_in_progress: bool,
 }
 
@@ -27,18 +26,11 @@ impl VMLexer {
         if file_path.extension().expect("File extension undefined") != "vm" {
             return Err(Error::new(ErrorKind::Other, "File ext should be vm!"));
         }
-        let src_file_name = file_path
-            .file_stem()
-            .expect("Wrong stem")
-            .to_str()
-            .unwrap()
-            .to_string();
 
         let file = File::open(&file_path).await?;
 
         let mut self_state = Self {
             file,
-            src_file_name,
             buffer: [0; LEXER_BUFFER_SIZE],
             cursor: LEXER_BUFFER_SIZE,
             end_word_cursor: LEXER_BUFFER_SIZE,

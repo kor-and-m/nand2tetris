@@ -1,5 +1,7 @@
 use hack_macro::{BinaryInstruction, SymbolicElem};
 use symbolic::SymbolicElem;
+
+#[derive(Debug)]
 pub enum AInstruction<'a> {
     Number(i16),
     Variable((&'a [u8], usize, i16)),
@@ -34,7 +36,7 @@ impl<'a> SymbolicElem<'a> for AInstruction<'a> {
     }
 }
 
-#[derive(SymbolicElem, BinaryInstruction)]
+#[derive(SymbolicElem, BinaryInstruction, Debug)]
 pub enum AConst {
     #[hack(int = b"0")]
     SP,

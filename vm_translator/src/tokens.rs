@@ -1,6 +1,9 @@
+use hack_ast::*;
+
 use phf::phf_map;
 use std::fmt;
 
+use hack_macro::instruction;
 use hack_macro::SymbolicElem;
 use symbolic::SymbolicElem;
 
@@ -15,7 +18,7 @@ pub static SEGMENTS: phf::Map<&'static [u8], Segment> = phf_map! {
     b"this" => Segment::This
 };
 
-#[derive(Hash, Debug, Clone, Copy, SymbolicElem)]
+#[derive(Hash, Debug, Clone, Copy, PartialEq, SymbolicElem)]
 pub enum Segment {
     #[hack(symbol = b"argument")]
     Arg,
@@ -33,6 +36,18 @@ pub enum Segment {
     That,
     #[hack(symbol = b"this")]
     This,
+}
+
+impl Segment {
+    pub fn as_instruction(&self) -> Instruction<'static> {
+        match self {
+            Segment::Arg => instruction!(b"@ARG"),
+            Segment::Local => instruction!(b"@LCL"),
+            Segment::This => instruction!(b"@THIS"),
+            Segment::That => instruction!(b"@THAT"),
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl fmt::Display for Segment {

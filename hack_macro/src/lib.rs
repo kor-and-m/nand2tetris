@@ -174,14 +174,47 @@ fn parse_helper_instraction(s: &str) -> String {
             }
         }
         Some('/') => {
-            if let Some('/') = c.next() {
-                let start_comment = if let Some(' ') = c.next() { 3 } else { 2 };
-                format!(
-                    "Instruction::Helper(HelperInstruction::Comment(b\"{}\"))",
-                    &s[start_comment..]
-                )
-            } else {
+            let n = c.next();
+
+            if n.is_none() {
                 panic!("Wrong helper command")
+            }
+
+            match n.unwrap() {
+                '/' => {
+                    let start_comment = if let Some(' ') = c.next() { 3 } else { 2 };
+                    format!(
+                        "Instruction::Helper(HelperInstruction::Comment(b\"{}\"))",
+                        &s[start_comment..]
+                    )
+                }
+                '@' => {
+                    let v: Vec<&str> = s[2..].split("_").collect();
+
+                    if v.len() != 3 {
+                        panic!("Label should be formated NAMESPACE_NAME_IDX")
+                    }
+
+                    if let Ok(label_number) = v[2].parse::<i32>() {
+                        format!(
+                           "Instruction::Helper(HelperInstruction::LabelVariable(LabelInstruction {{
+                                prefix: b\"{prefix}\",
+                                name: b\"{name}\",
+                                prefix_len: {prefix_len},
+                                name_len: {name_len},
+                                idx: {label_number},
+                            }}))",
+                            label_number = label_number,
+                            prefix = v[0],
+                            name = v[1],
+                            prefix_len = v[0].len(),
+                            name_len = v[1].len()
+                        )
+                    } else {
+                        panic!("Wrong helper command")
+                    }
+                }
+                _ => panic!("Wrong helper command"),
             }
         }
         _ => panic!("Wrong helper command"),

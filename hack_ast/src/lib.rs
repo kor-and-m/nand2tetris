@@ -47,6 +47,7 @@ macro_rules! write_instruction_set_bin {
     };
 }
 
+#[derive(Debug)]
 pub enum Instruction<'a> {
     A(AInstruction<'a>),
     C(CInstruction),
@@ -54,6 +55,10 @@ pub enum Instruction<'a> {
 }
 
 impl Instruction<'_> {
+    pub fn new_number(v: i16) -> Self {
+        Instruction::A(AInstruction::Number(v))
+    }
+
     pub fn write_bytes(&self, buff: &mut [u8], variable_pointer: &mut i16) -> usize {
         match self {
             Self::A(a) => {
@@ -75,13 +80,58 @@ pub struct VariableFactory<'a> {
     l: usize,
 }
 
-impl VariableFactory<'_> {
-    pub fn new<'a>(prefix: &'a [u8]) -> VariableFactory<'a> {
+impl<'a> VariableFactory<'a> {
+    pub fn new<'b>(prefix: &'b [u8]) -> VariableFactory<'b> {
         VariableFactory {
             prefix,
             idx: 0,
             l: prefix.len(),
         }
+    }
+
+    pub fn new_bool_variables(
+        &mut self,
+    ) -> (
+        Instruction<'a>,
+        Instruction<'a>,
+        Instruction<'a>,
+        Instruction<'a>,
+    ) {
+        self.idx += 1;
+        (
+            Instruction::Helper(HelperInstruction::Label(LabelInstruction {
+                prefix: self.prefix,
+                prefix_len: self.l,
+                name: b"TRUE",
+                name_len: 4,
+                idx: self.idx - 1,
+            })),
+            Instruction::Helper(HelperInstruction::LabelVariable(LabelInstruction {
+                prefix: self.prefix,
+                prefix_len: self.l,
+                name: b"TRUE",
+                name_len: 4,
+                idx: self.idx - 1,
+            })),
+            Instruction::Helper(HelperInstruction::Label(LabelInstruction {
+                prefix: self.prefix,
+                prefix_len: self.l,
+                name: b"FALSE",
+                name_len: 5,
+                idx: self.idx - 1,
+            })),
+            Instruction::Helper(HelperInstruction::LabelVariable(LabelInstruction {
+                prefix: self.prefix,
+                prefix_len: self.l,
+                name: b"FALSE",
+                name_len: 5,
+                idx: self.idx - 1,
+            })),
+        )
+    }
+
+    pub fn new_variable_with_idx(&self, idx: i16) -> Instruction<'a> {
+        Instruction::A(AInstruction::Variable((self.prefix, self.l, idx)))
     }
 
     pub fn new_variable(&mut self) -> Instruction<'_> {
@@ -185,6 +235,14 @@ mod tests {
     }
 
     #[test]
+    fn c_instruction2_format() {
+        let instruction = instruction!(b"0;JMP");
+        let mut buff = *b"XXXXXXX";
+        let l = instruction.write_symbols(&mut buff);
+        assert_eq!(buff[..l], *b"0;JMP");
+    }
+
+    #[test]
     fn helper_instruction1_format() {
         let instruction = instruction!(b"(MYFILE_TRUE_111)");
         let mut buff = [0u8; 100];
@@ -198,6 +256,30 @@ mod tests {
         let mut buff = [0u8; 100];
         let l = instruction.write_symbols(&mut buff);
         assert_eq!(buff[..l], *b"// Test comment");
+    }
+
+    #[test]
+    fn helper_instruction3_format() {
+        let instruction = instruction!(b"/@MYFILE_TRUE_111");
+        let mut buff = [0u8; 100];
+        let l = instruction.write_symbols(&mut buff);
+        assert_eq!(buff[..l], *b"@MYFILE_TRUE_111");
+    }
+
+    #[test]
+    fn helper_instruction4_format() {
+        let mut factory = VariableFactory::new(b"ExampleFile");
+        let (instruction1, instruction2, instruction3, instruction4) = factory.new_bool_variables();
+        let mut buff = [0u8; 100];
+        let mut l = instruction1.write_symbols(&mut buff);
+        assert_eq!(buff[..l], *b"(ExampleFile_TRUE_0)");
+        l = instruction2.write_symbols(&mut buff);
+        assert_eq!(buff[..l], *b"@ExampleFile_TRUE_0");
+
+        l = instruction3.write_symbols(&mut buff);
+        assert_eq!(buff[..l], *b"(ExampleFile_FALSE_0)");
+        l = instruction4.write_symbols(&mut buff);
+        assert_eq!(buff[..l], *b"@ExampleFile_FALSE_0");
     }
 
     #[test]
@@ -216,10 +298,13 @@ mod tests {
         let mut buff = [0u8; 100];
 
         let mut factory = VariableFactory::new(b"Another");
+        let mut p = Vec::new();
+        let i = instruction!(b"@11");
+        p.push(i);
 
         let l = write_instruction_set_symbols!(
             &mut buff,
-            &[instruction!(b"@11")],
+            &p,
             &PUSH_INSTRUCTION_SET,
             &[instruction!(b"@5"), factory.new_variable()]
         );
@@ -277,10 +362,7 @@ mod tests {
             100,
             &[instruction!(b"@11")],
             &PUSH_INSTRUCTION_SET,
-            &[
-                instruction!(b"@5"),
-                factory.new_variable()
-            ]
+            &[instruction!(b"@5"), factory.new_variable()]
         );
 
         assert_eq!(

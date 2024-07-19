@@ -1,7 +1,7 @@
 use hack_macro::{BinaryInstruction, SymbolicElem};
 use symbolic::SymbolicElem;
 
-#[derive(SymbolicElem, BinaryInstruction)]
+#[derive(SymbolicElem, BinaryInstruction, Debug)]
 pub enum CInstructionExpression {
     #[hack(binary = b"0101010")]
     #[hack(symbol = b"0")]
@@ -89,7 +89,7 @@ pub enum CInstructionExpression {
     DOrM,
 }
 
-#[derive(SymbolicElem, BinaryInstruction)]
+#[derive(SymbolicElem, BinaryInstruction, Debug)]
 #[hack(suffix = b"=")]
 pub enum CInstructionDest {
     #[hack(binary = b"111")]
@@ -111,7 +111,7 @@ pub enum CInstructionDest {
     NODEST,
 }
 
-#[derive(SymbolicElem, BinaryInstruction)]
+#[derive(SymbolicElem, BinaryInstruction, Debug)]
 #[hack(prefix = b";")]
 pub enum CInstructionJump {
     #[hack(binary = b"001")]
@@ -133,6 +133,7 @@ pub enum CInstructionJump {
     NOJMP,
 }
 
+#[derive(Debug)]
 pub struct CInstruction {
     pub dest: CInstructionDest,
     pub expression: CInstructionExpression,
@@ -143,7 +144,7 @@ impl<'a> SymbolicElem<'a> for CInstruction {
     fn write_symbols(&self, buff: &mut [u8]) -> usize {
         let mut result = self.dest.write_symbols(buff);
         result += self.expression.write_symbols(&mut buff[result..]);
-        result + self.jump.write_symbols(buff)
+        result + self.jump.write_symbols(&mut buff[result..])
     }
 }
 
