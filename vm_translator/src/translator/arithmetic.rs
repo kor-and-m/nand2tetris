@@ -1,7 +1,7 @@
 use hack_ast::*;
 use hack_macro::instruction;
 
-use crate::tokens::ArithmeticToken;
+use vm_tokens::ArithmeticToken;
 
 use super::{constants::POP_INSTRUCTIONS, model::Translator};
 
@@ -59,7 +59,6 @@ pub fn translate_arithmetic_token<'a, 'b>(
         }
     }
 }
-
 
 fn jump_instruction_by_token(token: &ArithmeticToken) -> Instruction<'static> {
     match token {

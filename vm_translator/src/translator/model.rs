@@ -2,10 +2,13 @@ use std::mem::{self, MaybeUninit};
 
 use hack_ast::*;
 
-use crate::tokens::{Token, TokenPayload};
 use symbolic::SymbolicElem;
+use vm_tokens::{Token, TokenPayload};
 
-use super::{arithmetic::translate_arithmetic_token, memory::translate_memory_token};
+use super::{
+    arithmetic::translate_arithmetic_token, branch::translate_branch_token,
+    memory::translate_memory_token,
+};
 
 enum InstructionOrLink<'a> {
     I(Instruction<'a>),
@@ -74,15 +77,20 @@ impl<'a> Translator<'a> {
     }
 
     pub fn translate<'b, 'c>(&'b mut self, factory: &'c mut VariableFactory<'a>) {
-        while self.tokens_cursor_down % TRANSLATOR_TOKEN_CAPACITY != self.tokens_cursor_up % TRANSLATOR_TOKEN_CAPACITY {
+        while self.tokens_cursor_down % TRANSLATOR_TOKEN_CAPACITY
+            != self.tokens_cursor_up % TRANSLATOR_TOKEN_CAPACITY
+        {
             let raw_token =
-            &self.tokens[self.tokens_cursor_down % TRANSLATOR_TOKEN_CAPACITY] as *const Token;
-            let token = unsafe { &*raw_token };
+                &mut self.tokens[self.tokens_cursor_down % TRANSLATOR_TOKEN_CAPACITY] as *mut Token;
+            let token = unsafe { &mut *raw_token };
             self.tokens_cursor_down += 1;
-            match &token.payload {
+            match &mut token.payload {
+                TokenPayload::Branch(branch) => translate_branch_token(self, branch, factory),
                 TokenPayload::Memory(memory) => translate_memory_token(self, memory, factory),
-                TokenPayload::Arithmetic(arithmetic) => translate_arithmetic_token(self, arithmetic, factory)
-            }   
+                TokenPayload::Arithmetic(arithmetic) => {
+                    translate_arithmetic_token(self, arithmetic, factory)
+                }
+            }
         }
     }
 
@@ -123,8 +131,8 @@ mod tests {
     use std::fs::File;
     use std::io::prelude::*;
 
-    use crate::tokens::{ArithmeticToken, MemoryToken, MemoryTokenKind, Segment};
     use crate::translator::constants::PUSH_INSTRUCTIONS;
+    use vm_tokens::{ArithmeticToken, MemoryToken, MemoryTokenKind, MemoryTokenSegment};
 
     use super::*;
 
@@ -171,7 +179,7 @@ mod tests {
             instruction: 0,
             payload: TokenPayload::Memory(MemoryToken {
                 kind: MemoryTokenKind::Pop,
-                segment: Segment::Arg,
+                segment: MemoryTokenSegment::Arg,
                 val: 0,
             }),
         };
@@ -198,7 +206,7 @@ mod tests {
         let token = Token {
             src: 0,
             instruction: 0,
-            payload: TokenPayload::Arithmetic(ArithmeticToken::Eq)
+            payload: TokenPayload::Arithmetic(ArithmeticToken::Eq),
         };
 
         let mut buff = [0u8; 1024];
@@ -223,7 +231,7 @@ mod tests {
         let token = Token {
             src: 0,
             instruction: 0,
-            payload: TokenPayload::Arithmetic(ArithmeticToken::Add)
+            payload: TokenPayload::Arithmetic(ArithmeticToken::Add),
         };
 
         let mut buff = [0u8; 1024];
@@ -248,7 +256,7 @@ mod tests {
         let token = Token {
             src: 0,
             instruction: 0,
-            payload: TokenPayload::Arithmetic(ArithmeticToken::Sub)
+            payload: TokenPayload::Arithmetic(ArithmeticToken::Sub),
         };
 
         let mut buff = [0u8; 1024];
@@ -273,7 +281,7 @@ mod tests {
         let token = Token {
             src: 0,
             instruction: 0,
-            payload: TokenPayload::Arithmetic(ArithmeticToken::Not)
+            payload: TokenPayload::Arithmetic(ArithmeticToken::Not),
         };
 
         let mut buff = [0u8; 1024];

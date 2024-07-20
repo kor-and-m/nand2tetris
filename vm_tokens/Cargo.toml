@@ -1,0 +1,9 @@
+[package]
+name = "vm_tokens"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+phf = { version = "0.11.2", features = ["macros"] }
+hack_macro = { path = "../hack_macro" }
+symbolic = { path = "../symbolic" }

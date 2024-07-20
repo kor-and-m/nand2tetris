@@ -1,7 +1,7 @@
-use std::{env, mem};
 use std::mem::MaybeUninit;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
+use std::{env, mem};
 
 use hack_ast::VariableFactory;
 use tokio::fs::OpenOptions;
@@ -9,7 +9,6 @@ use tokio::io::{self, AsyncWriteExt};
 use translator::Translator;
 
 mod lexer;
-mod tokens;
 mod translator;
 
 #[tokio::main]
@@ -29,15 +28,14 @@ async fn main() -> io::Result<()> {
     let mut f_write = if args.len() > 2 {
         f_write_options.open(&args[2]).await?
     } else {
-        f_write_options.open(file_path.with_extension("asm")).await?
+        f_write_options
+            .open(file_path.with_extension("asm"))
+            .await?
     };
 
     let mut buff = {
-        let x: [MaybeUninit<u8>; 4096] =
-            unsafe { MaybeUninit::uninit().assume_init() };
-        unsafe {
-            mem::transmute::<_, [u8; 4096]>(x)
-        }
+        let x: [MaybeUninit<u8>; 4096] = unsafe { MaybeUninit::uninit().assume_init() };
+        unsafe { mem::transmute::<_, [u8; 4096]>(x) }
     };
 
     'outer: loop {

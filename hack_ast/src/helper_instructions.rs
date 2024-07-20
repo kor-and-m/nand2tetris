@@ -11,6 +11,8 @@ pub struct LabelInstruction<'a> {
 
 #[derive(Debug)]
 pub enum HelperInstruction<'a> {
+    RawLabel(Vec<u8>),
+    RawVarLabel(Vec<u8>),
     Label(LabelInstruction<'a>),
     LabelVariable(LabelInstruction<'a>),
     Comment(&'a [u8]),
@@ -19,6 +21,21 @@ pub enum HelperInstruction<'a> {
 impl<'a> SymbolicElem<'a> for HelperInstruction<'a> {
     fn write_symbols(&self, buff: &mut [u8]) -> usize {
         match self {
+            HelperInstruction::RawLabel(data) => {
+                buff[0] = b'(';
+
+                let l = data.len();
+                buff[1..(l + 1)].copy_from_slice(data);
+                buff[l + 1] = b')';
+                l + 2
+            }
+            HelperInstruction::RawVarLabel(data) => {
+                buff[0] = b'@';
+
+                let l = data.len();
+                buff[1..(l + 1)].copy_from_slice(data);
+                l + 1
+            }
             HelperInstruction::Label(label) => {
                 buff[0] = b'(';
 

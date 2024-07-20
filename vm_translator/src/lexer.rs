@@ -3,7 +3,7 @@ use std::path::Path;
 use tokio::fs::File;
 use tokio::io::{self, AsyncReadExt};
 
-use crate::tokens::*;
+use vm_tokens::*;
 
 const LEXER_BUFFER_SIZE: usize = 4096;
 
@@ -157,6 +157,13 @@ impl VMLexer {
             [b'a', b'n', b'd', ..] => self.build_arithmetic_token(ArithmeticToken::And),
             [b'o', b'r', ..] => self.build_arithmetic_token(ArithmeticToken::Or),
             [b'n', b'o', b't', ..] => self.build_arithmetic_token(ArithmeticToken::Not),
+            [b'l', b'a', b'b', b'e', b'l', ..] => {
+                self.build_branch_token(BranchTokenKind::Label).await
+            }
+            [b'g', b'o', b't', b'o', ..] => self.build_branch_token(BranchTokenKind::Goto).await,
+            [b'i', b'f', b'-', b'g', b'o', b't', b'o', ..] => {
+                self.build_branch_token(BranchTokenKind::IfGoto).await
+            }
             _ => {
                 let i = std::str::from_utf8(word).unwrap();
                 panic!("{}: Unexected instruction {}", src_line, i);
@@ -165,12 +172,20 @@ impl VMLexer {
         Some(self.enrich_token_payload(token_payload))
     }
 
+    async fn build_branch_token(&mut self, kind: BranchTokenKind) -> TokenPayload {
+        let word = self.next_word().await.unwrap();
+        TokenPayload::Branch(BranchToken {
+            kind,
+            name: word.to_vec(),
+        })
+    }
+
     fn build_arithmetic_token(&mut self, kind: ArithmeticToken) -> TokenPayload {
         TokenPayload::Arithmetic(kind)
     }
 
     fn enrich_token_payload(&self, payload: TokenPayload) -> Token {
-        Token {
+        vm_tokens::Token {
             payload,
             instruction: self.instruction_number,
             src: self.src_line,

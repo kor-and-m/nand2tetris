@@ -59,6 +59,14 @@ impl Instruction<'_> {
         Instruction::A(AInstruction::Number(v))
     }
 
+    pub fn new_raw_label<'b>(b: Vec<u8>) -> Instruction<'b> {
+        Instruction::Helper(HelperInstruction::RawLabel(b))
+    }
+
+    pub fn new_raw_var_label<'b>(b: Vec<u8>) -> Instruction<'b> {
+        Instruction::Helper(HelperInstruction::RawVarLabel(b))
+    }
+
     pub fn write_bytes(&self, buff: &mut [u8], variable_pointer: &mut i16) -> usize {
         match self {
             Self::A(a) => {

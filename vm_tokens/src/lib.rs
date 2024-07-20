@@ -1,25 +1,35 @@
-use hack_ast::*;
-
 use phf::phf_map;
 use std::fmt;
 
-use hack_macro::instruction;
 use hack_macro::SymbolicElem;
 use symbolic::SymbolicElem;
 
-pub static SEGMENTS: phf::Map<&'static [u8], Segment> = phf_map! {
-    b"argument" => Segment::Arg,
-    b"constant" => Segment::Const,
-    b"pointer" => Segment::Pointer,
-    b"static" => Segment::Static,
-    b"local" => Segment::Local,
-    b"temp" => Segment::Temp,
-    b"that" => Segment::That,
-    b"this" => Segment::This
+pub static SEGMENTS: phf::Map<&'static [u8], MemoryTokenSegment> = phf_map! {
+    b"argument" => MemoryTokenSegment::Arg,
+    b"constant" => MemoryTokenSegment::Const,
+    b"pointer" => MemoryTokenSegment::Pointer,
+    b"static" => MemoryTokenSegment::Static,
+    b"local" => MemoryTokenSegment::Local,
+    b"temp" => MemoryTokenSegment::Temp,
+    b"that" => MemoryTokenSegment::That,
+    b"this" => MemoryTokenSegment::This
 };
 
+#[derive(Debug)]
+pub enum BranchTokenKind {
+    Label,
+    Goto,
+    IfGoto,
+}
+
+#[derive(Debug)]
+pub struct BranchToken {
+    pub kind: BranchTokenKind,
+    pub name: Vec<u8>,
+}
+
 #[derive(Hash, Debug, Clone, Copy, PartialEq, SymbolicElem)]
-pub enum Segment {
+pub enum MemoryTokenSegment {
     #[hack(symbol = b"argument")]
     Arg,
     #[hack(symbol = b"constant")]
@@ -38,29 +48,17 @@ pub enum Segment {
     This,
 }
 
-impl Segment {
-    pub fn as_instruction(&self) -> Instruction<'static> {
-        match self {
-            Segment::Arg => instruction!(b"@ARG"),
-            Segment::Local => instruction!(b"@LCL"),
-            Segment::This => instruction!(b"@THIS"),
-            Segment::That => instruction!(b"@THAT"),
-            _ => unreachable!(),
-        }
-    }
-}
-
-impl fmt::Display for Segment {
+impl fmt::Display for MemoryTokenSegment {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let label = match self {
-            Segment::Arg => "argument",
-            Segment::Const => "constant",
-            Segment::Pointer => "pointer",
-            Segment::Static => "static",
-            Segment::Local => "local",
-            Segment::Temp => "temp",
-            Segment::That => "that",
-            Segment::This => "this",
+            MemoryTokenSegment::Arg => "argument",
+            MemoryTokenSegment::Const => "constant",
+            MemoryTokenSegment::Pointer => "pointer",
+            MemoryTokenSegment::Static => "static",
+            MemoryTokenSegment::Local => "local",
+            MemoryTokenSegment::Temp => "temp",
+            MemoryTokenSegment::That => "that",
+            MemoryTokenSegment::This => "this",
         };
 
         write!(f, "{}", label)
@@ -86,7 +84,7 @@ impl fmt::Display for MemoryTokenKind {
 
 #[derive(Debug)]
 pub struct MemoryToken {
-    pub segment: Segment,
+    pub segment: MemoryTokenSegment,
     pub kind: MemoryTokenKind,
     pub val: i16,
 }
@@ -141,6 +139,7 @@ impl fmt::Display for ArithmeticToken {
 pub enum TokenPayload {
     Memory(MemoryToken),
     Arithmetic(ArithmeticToken),
+    Branch(BranchToken),
 }
 
 #[derive(Debug)]
@@ -153,6 +152,7 @@ pub struct Token {
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.payload {
+            TokenPayload::Branch(_) => Ok(()),
             TokenPayload::Memory(memory_token) => memory_token.fmt(f),
             TokenPayload::Arithmetic(arithmetic_token) => arithmetic_token.fmt(f),
         }
