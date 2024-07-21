@@ -16,6 +16,19 @@ pub static SEGMENTS: phf::Map<&'static [u8], MemoryTokenSegment> = phf_map! {
 };
 
 #[derive(Debug)]
+pub struct FunctionMetadata {
+    pub name: Vec<u8>,
+    pub args_count: i16,
+}
+
+#[derive(Debug)]
+pub enum FunctionToken {
+    Definition(FunctionMetadata),
+    Call(FunctionMetadata),
+    Return,
+}
+
+#[derive(Debug)]
 pub enum BranchTokenKind {
     Label,
     Goto,
@@ -140,6 +153,7 @@ pub enum TokenPayload {
     Memory(MemoryToken),
     Arithmetic(ArithmeticToken),
     Branch(BranchToken),
+    Function(FunctionToken),
 }
 
 #[derive(Debug)]
@@ -152,6 +166,7 @@ pub struct Token {
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.payload {
+            TokenPayload::Function(_) => Ok(()),
             TokenPayload::Branch(_) => Ok(()),
             TokenPayload::Memory(memory_token) => memory_token.fmt(f),
             TokenPayload::Arithmetic(arithmetic_token) => arithmetic_token.fmt(f),

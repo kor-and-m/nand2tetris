@@ -73,6 +73,10 @@ impl<'a> SymbolicElem<'a> for HelperInstruction<'a> {
             }
             HelperInstruction::Comment(text) => {
                 let l = text.len();
+                if l == 0 {
+                    return 0;
+                }
+
                 buff[0] = b'/';
                 buff[1] = b'/';
                 buff[2] = b' ';

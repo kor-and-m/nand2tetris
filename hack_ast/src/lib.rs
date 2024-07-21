@@ -59,6 +59,14 @@ impl Instruction<'_> {
         Instruction::A(AInstruction::Number(v))
     }
 
+    pub fn new_comment<'a>(comment_text: &'a [u8]) -> Instruction<'a> {
+        Instruction::Helper(HelperInstruction::Comment(comment_text))
+    }
+
+    pub fn new_line() -> Self {
+        Instruction::Helper(HelperInstruction::Comment(&[]))
+    }
+
     pub fn new_raw_label<'b>(b: Vec<u8>) -> Instruction<'b> {
         Instruction::Helper(HelperInstruction::RawLabel(b))
     }
@@ -84,7 +92,7 @@ impl Instruction<'_> {
 
 pub struct VariableFactory<'a> {
     idx: i16,
-    prefix: &'a [u8],
+    pub prefix: &'a [u8],
     l: usize,
 }
 
