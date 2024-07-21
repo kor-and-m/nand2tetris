@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use symbolic::SymbolicElem;
 
 mod a_instructions;
@@ -27,13 +29,14 @@ macro_rules! write_instruction_set_symbols {
 
 #[macro_export]
 macro_rules! write_instruction_set_bin {
-    ( $buff:expr, $variable_pointer:expr, $( $x:expr ),* ) => {
+    ( $buff:expr, $variable_pointer:expr, $variable_static_map:expr, $( $x:expr ),* ) => {
         {
             let mut cursor = 0;
-            let mut variable_pointer = $variable_pointer;
+            let variable_pointer = $variable_pointer;
+            let mut m = $variable_static_map;
             $(
                 for i in $x.iter() {
-                    let cursor_incr = i.write_bytes(&mut $buff[cursor..], &mut variable_pointer);
+                    let cursor_incr = i.write_bytes(&mut $buff[cursor..], variable_pointer, &mut m);
                     cursor += cursor_incr;
 
                     if cursor_incr > 0 {
@@ -47,7 +50,7 @@ macro_rules! write_instruction_set_bin {
     };
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Instruction<'a> {
     A(AInstruction<'a>),
     C(CInstruction),
@@ -75,10 +78,15 @@ impl Instruction<'_> {
         Instruction::Helper(HelperInstruction::RawVarLabel(b))
     }
 
-    pub fn write_bytes(&self, buff: &mut [u8], variable_pointer: &mut i16) -> usize {
+    pub fn write_bytes(
+        &self,
+        buff: &mut [u8],
+        variable_pointer: &mut i16,
+        m: &mut HashMap<Vec<u8>, String>,
+    ) -> usize {
         match self {
             Self::A(a) => {
-                a.write_bytes(buff, variable_pointer);
+                a.write_bytes(buff, variable_pointer, m);
                 16
             }
             Self::C(c) => {
@@ -150,7 +158,7 @@ impl<'a> VariableFactory<'a> {
         Instruction::A(AInstruction::Variable((self.prefix, self.l, idx)))
     }
 
-    pub fn new_variable(&mut self) -> Instruction<'_> {
+    pub fn new_variable(&mut self) -> Instruction<'a> {
         let i = Instruction::A(AInstruction::Variable((self.prefix, self.l, self.idx)));
         self.idx += 1;
         i
@@ -169,6 +177,8 @@ impl<'a> SymbolicElem<'a> for Instruction<'a> {
 
 #[cfg(test)]
 mod tests {
+    use std::str::from_utf8;
+
     use hack_macro::instruction;
 
     use super::*;
@@ -335,55 +345,64 @@ mod tests {
     fn sp_instruction_to_bin() {
         let sp = instruction!(b"@SP");
         let mut buff = [0u8; 500];
-        sp.write_bytes(&mut buff, &mut 400);
+        let mut m = HashMap::new();
+
+        sp.write_bytes(&mut buff, &mut 400, &mut m);
         assert_eq!(buff[..16], *b"0000000000000000")
     }
 
     #[test]
     fn c_instruction_to_bin() {
         let mut buff = [0u8; 500];
+        let mut m = HashMap::new();
 
-        let a_eq_m = instruction!(b"A=M");
-        a_eq_m.write_bytes(&mut buff, &mut 400);
-        assert_eq!(buff[..16], *b"1111001110000000");
-
-        let m_eq_d = instruction!(b"M=D");
-        m_eq_d.write_bytes(&mut buff, &mut 400);
-        assert_eq!(buff[..16], *b"1110010001100000");
-
-        let incr_m = instruction!(b"M=M+1");
-        incr_m.write_bytes(&mut buff, &mut 400);
-        assert_eq!(buff[..16], *b"1110011110111000");
-    }
-
-    #[test]
-    fn write_instruction_set_bin1_test() {
-        let mut buff = [0u8; 500];
-
-        let l = write_instruction_set_bin!(&mut buff, 100, &PUSH_INSTRUCTION_SET);
-        assert_eq!(
-            buff[..l],
-            *b"0000000000000000\n1111001110000000\n1110010001100000\n0000000000000000\n1110011110111000\n"
-        );
+        let a_eq_m = instruction!(b"D=A");
+        a_eq_m.write_bytes(&mut buff, &mut 400, &mut m);
+        assert_eq!(buff[..16], *b"1110110000010000");
     }
 
     #[test]
     fn write_instruction_set_bin2_test() {
         let mut buff = [0u8; 500];
+        let m = HashMap::new();
 
         let mut factory = VariableFactory::new(b"Another");
+        let mut k = 100;
+
+        let v = factory.new_variable();
+        let v2 = factory.new_variable();
 
         let l = write_instruction_set_bin!(
             &mut buff,
-            100,
+            &mut k,
+            m,
             &[instruction!(b"@11")],
             &PUSH_INSTRUCTION_SET,
-            &[instruction!(b"@5"), factory.new_variable()]
+            &[instruction!(b"@5"), v.clone(), v, v2]
         );
 
+        assert_eq!(k, 102);
+        println!("{}", from_utf8(&buff[..l]).unwrap());
+
         assert_eq!(
-            buff[..l],
-            *b"0000000000001011\n0000000000000000\n1111001110000000\n1110010001100000\n0000000000000000\n1110011110111000\n0000000000000101\n0000000001100100\n"
+            from_utf8(&buff[..l])
+                .unwrap()
+                .replace(" ", "")
+                .replace("\n", ""),
+            "
+            0000000000001011
+            0000000000000000
+            1111110000100000
+            1110001100001000
+            0000000000000000
+            1111110111001000
+            0000000000000101
+            0000000001100100
+            0000000001100100
+            0000000001100101
+            "
+            .replace(" ", "")
+            .replace("\n", "")
         );
     }
 }

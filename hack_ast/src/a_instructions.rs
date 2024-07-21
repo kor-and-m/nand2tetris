@@ -1,7 +1,9 @@
+use std::collections::HashMap;
+
 use hack_macro::{BinaryInstruction, SymbolicElem};
 use symbolic::SymbolicElem;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum AInstruction<'a> {
     Number(i16),
     Variable((&'a [u8], usize, i16)),
@@ -9,13 +11,29 @@ pub enum AInstruction<'a> {
 }
 
 impl AInstruction<'_> {
-    pub fn write_bytes(&self, buff: &mut [u8], variable_pointer: &mut i16) {
+    pub fn write_bytes(
+        &self,
+        buff: &mut [u8],
+        variable_pointer: &mut i16,
+        m: &mut HashMap<Vec<u8>, String>,
+    ) {
         match self {
             Self::Const(c) => buff[..16].copy_from_slice(c.as_bytes_const()),
             Self::Number(n) => buff[..16].copy_from_slice(format!("{:016b}", n).as_bytes()),
-            Self::Variable(_) => {
-                buff[..16].copy_from_slice(format!("{:016b}", variable_pointer).as_bytes());
-                *variable_pointer += 1;
+            Self::Variable((_, l, _)) => {
+                let mut v = Vec::with_capacity(l + 5);
+                unsafe { v.set_len(l + 5) };
+                let l2 = self.write_symbols(&mut v);
+                unsafe { v.set_len(l2) };
+
+                if let Some(s) = m.get(&v) {
+                    buff[..16].copy_from_slice(s.as_bytes());
+                } else {
+                    let s = format!("{:016b}", variable_pointer);
+                    buff[..16].copy_from_slice(s.as_bytes());
+                    m.insert(v, s);
+                    *variable_pointer += 1;
+                }
             }
         }
     }
@@ -36,7 +54,7 @@ impl<'a> SymbolicElem<'a> for AInstruction<'a> {
     }
 }
 
-#[derive(SymbolicElem, BinaryInstruction, Debug)]
+#[derive(SymbolicElem, BinaryInstruction, Debug, Clone)]
 pub enum AConst {
     #[hack(int = b"0")]
     SP,

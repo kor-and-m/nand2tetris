@@ -1,7 +1,7 @@
 use hack_macro::{BinaryInstruction, SymbolicElem};
 use symbolic::SymbolicElem;
 
-#[derive(SymbolicElem, BinaryInstruction, Debug)]
+#[derive(SymbolicElem, BinaryInstruction, Debug, Clone)]
 pub enum CInstructionExpression {
     #[hack(binary = b"0101010")]
     #[hack(symbol = b"0")]
@@ -89,7 +89,7 @@ pub enum CInstructionExpression {
     DOrM,
 }
 
-#[derive(SymbolicElem, BinaryInstruction, Debug)]
+#[derive(SymbolicElem, BinaryInstruction, Debug, Clone)]
 #[hack(suffix = b"=")]
 pub enum CInstructionDest {
     #[hack(binary = b"111")]
@@ -111,7 +111,7 @@ pub enum CInstructionDest {
     NODEST,
 }
 
-#[derive(SymbolicElem, BinaryInstruction, Debug)]
+#[derive(SymbolicElem, BinaryInstruction, Debug, Clone)]
 #[hack(prefix = b";")]
 pub enum CInstructionJump {
     #[hack(binary = b"001")]
@@ -133,7 +133,7 @@ pub enum CInstructionJump {
     NOJMP,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CInstruction {
     pub dest: CInstructionDest,
     pub expression: CInstructionExpression,
@@ -151,8 +151,8 @@ impl<'a> SymbolicElem<'a> for CInstruction {
 impl CInstruction {
     pub fn write_bytes(&self, buff: &mut [u8]) {
         buff[..3].copy_from_slice(b"111");
-        buff[3..6].copy_from_slice(self.dest.as_bytes_const());
-        buff[6..13].copy_from_slice(self.expression.as_bytes_const());
+        buff[3..10].copy_from_slice(self.expression.as_bytes_const());
+        buff[10..13].copy_from_slice(self.dest.as_bytes_const());
         buff[13..16].copy_from_slice(self.jump.as_bytes_const());
     }
 }

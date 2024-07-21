@@ -1,6 +1,6 @@
 use symbolic::SymbolicElem;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LabelInstruction<'a> {
     pub prefix: &'a [u8],
     pub name: &'a [u8],
@@ -9,7 +9,7 @@ pub struct LabelInstruction<'a> {
     pub idx: i16,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum HelperInstruction<'a> {
     RawLabel(Vec<u8>),
     RawVarLabel(Vec<u8>),

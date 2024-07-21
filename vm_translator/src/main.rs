@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::mem::MaybeUninit;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
@@ -23,17 +24,19 @@ async fn main() -> io::Result<()> {
     };
 
     let silent_comments = env::var("SILENT_COMMENTS").is_ok();
+    let binary_target = env::var("TO_BINARY").is_ok();
+    let ext = if binary_target { "hack" } else { "asm" };
     let mut opts = TranslateOpts::new();
     opts.set_comments(!silent_comments);
 
     let f = if file_path.is_dir() {
         let mut b = file_path.to_path_buf();
         let os_s = b.file_stem().unwrap();
-        let s = format!("{}.asm", os_s.to_str().unwrap());
+        let s = format!("{}.{}", os_s.to_str().unwrap(), ext);
         b.push(&s);
         b
     } else {
-        file_path.with_extension("asm")
+        file_path.with_extension(ext)
     };
 
     let write_file_path = if args.len() > 2 {
@@ -43,26 +46,50 @@ async fn main() -> io::Result<()> {
     };
 
     let mut f_write = open_write_file(write_file_path).await?;
+    let mut pointer = 16;
+    let mut static_map = HashMap::new();
 
     if file_path.is_dir() {
         let mut paths = read_dir(file_path).await.unwrap();
         let mut translator = Translator::new_with_opts(opts);
         let mut factory = VariableFactory::new(b"initial_call");
         translator.init_translator(&mut factory);
-        let l = translator.instructions_to_symbols(&mut buff, 100);
+        let l = if binary_target {
+            translator.instructions_to_bytes(&mut buff, 100, &mut pointer, &mut static_map)
+        } else {
+            translator.instructions_to_symbols(&mut buff, 100)
+        };
         f_write.write(&mut buff[..l]).await.unwrap();
 
         while let Some(path) = paths.next_entry().await? {
             let path_type = path.path();
             let ext = path_type.extension().unwrap();
             if let Some("vm") = ext.to_str() {
-                translate_file(path_type.as_path(), &mut f_write, &mut buff, opts).await?
+                translate_file(
+                    path_type.as_path(),
+                    &mut f_write,
+                    &mut buff,
+                    opts,
+                    binary_target,
+                    &mut pointer,
+                    &mut static_map,
+                )
+                .await?
             }
         }
 
         Ok(())
     } else {
-        translate_file(&file_path, &mut f_write, &mut buff, opts).await
+        translate_file(
+            &file_path,
+            &mut f_write,
+            &mut buff,
+            opts,
+            binary_target,
+            &mut pointer,
+            &mut static_map,
+        )
+        .await
     }
 }
 
@@ -79,6 +106,9 @@ async fn translate_file(
     f_write: &mut File,
     buff: &mut [u8],
     opts: TranslateOpts,
+    binary_target: bool,
+    static_pointer: &mut i16,
+    static_map: &mut HashMap<Vec<u8>, String>,
 ) -> io::Result<()> {
     let mut lexer = lexer::VMLexer::new(file_path.to_str().unwrap()).await?;
     let src_file_name = file_path.file_stem().expect("Wrong stem");
@@ -98,13 +128,29 @@ async fn translate_file(
                 translator.save_token(token);
             } else {
                 translator.translate(&mut factory);
-                write_chunks(&mut translator, f_write, buff).await?;
+                write_chunks(
+                    &mut translator,
+                    f_write,
+                    buff,
+                    binary_target,
+                    static_pointer,
+                    static_map,
+                )
+                .await?;
                 break 'outer;
             }
         }
 
         translator.translate(&mut factory);
-        write_chunks(&mut translator, f_write, buff).await?;
+        write_chunks(
+            &mut translator,
+            f_write,
+            buff,
+            binary_target,
+            static_pointer,
+            static_map,
+        )
+        .await?;
         translator.reset();
     }
 
@@ -115,9 +161,16 @@ async fn write_chunks(
     translator: &mut Translator<'_>,
     f_write: &mut File,
     buff: &mut [u8],
+    binary_target: bool,
+    static_pointer: &mut i16,
+    static_map: &mut HashMap<Vec<u8>, String>,
 ) -> io::Result<()> {
     loop {
-        let l = translator.instructions_to_symbols(buff, 100);
+        let l = if binary_target {
+            translator.instructions_to_bytes(buff, 100, static_pointer, static_map)
+        } else {
+            translator.instructions_to_symbols(buff, 100)
+        };
         if l == 0 {
             break;
         }

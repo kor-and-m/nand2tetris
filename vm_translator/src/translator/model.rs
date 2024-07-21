@@ -1,5 +1,6 @@
 use std::{
     cmp::min,
+    collections::HashMap,
     mem::{self, MaybeUninit},
 };
 
@@ -121,6 +122,57 @@ impl<'a> Translator<'a> {
             };
             buff[cursor] = b'\n';
             cursor += 1;
+        }
+        let res = cursor - self.cursor_buff;
+        self.cursor_buff = cursor;
+        res
+    }
+
+    pub fn instructions_to_bytes(
+        &mut self,
+        buff: &mut [u8],
+        chunk: usize,
+        static_pointer: &mut i16,
+        static_map: &mut HashMap<Vec<u8>, String>,
+    ) -> usize {
+        let mut cursor = self.cursor_buff;
+        let cursor_up = min(self.cursor_down + chunk, self.cursor);
+        for il in self.instructions[self.cursor_down..cursor_up].iter() {
+            self.cursor_down += 1;
+            let l1 = match il {
+                InstructionOrLink::I(i) => {
+                    i.write_bytes(&mut buff[cursor..], static_pointer, static_map)
+                }
+                InstructionOrLink::L(l) => {
+                    let mut cursor2 = 0;
+                    for i2 in l.iter() {
+                        if !self.instruction_is_needed(i2) {
+                            continue;
+                        }
+                        let l2 = i2.write_bytes(
+                            &mut buff[(cursor + cursor2)..],
+                            static_pointer,
+                            static_map,
+                        );
+
+                        if l2 != 0 {
+                            cursor2 += l2;
+                            buff[cursor + cursor2] = b'\n';
+                            cursor2 += 1;
+                        }
+                    }
+                    if cursor2 != 0 {
+                        cursor2 - 1
+                    } else {
+                        0
+                    }
+                }
+            };
+            if l1 != 0 {
+                cursor += l1;
+                buff[cursor] = b'\n';
+                cursor += 1;
+            }
         }
         let res = cursor - self.cursor_buff;
         self.cursor_buff = cursor;
