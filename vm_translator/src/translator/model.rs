@@ -1,33 +1,69 @@
-use std::mem::{self, MaybeUninit};
+use std::{
+    cmp::min,
+    mem::{self, MaybeUninit},
+};
 
 use hack_ast::*;
 
+use hack_macro::instruction;
 use symbolic::SymbolicElem;
-use vm_tokens::{Token, TokenPayload};
+use vm_tokens::{FunctionMetadata, FunctionToken, Token, TokenPayload};
 
 use super::{
     arithmetic::translate_arithmetic_token, branch::translate_branch_token,
-    memory::translate_memory_token,
+    function::translate_function_token, memory::translate_memory_token,
 };
 
+const TRANSLATOR_INSTRUCTIONS_CAPACITY: usize = 1024;
+const TRANSLATOR_TOKEN_CAPACITY: usize = 128;
+const INIT_SP: [Instruction<'static>; 4] = [
+    instruction!(b"@256"),
+    instruction!(b"D=A"),
+    instruction!(b"@SP"),
+    instruction!(b"M=D"),
+];
+
+#[derive(Clone, Copy)]
+pub struct TranslateOpts {
+    comments: bool,
+}
+
+impl TranslateOpts {
+    pub fn new() -> Self {
+        Self { comments: true }
+    }
+
+    pub fn set_comments(&mut self, v: bool) -> &mut Self {
+        self.comments = v;
+        self
+    }
+}
+
+#[derive(Debug)]
 enum InstructionOrLink<'a> {
     I(Instruction<'a>),
     L(&'a [Instruction<'a>]),
 }
-
-const TRANSLATOR_INSTRUCTIONS_CAPACITY: usize = 512;
-const TRANSLATOR_TOKEN_CAPACITY: usize = 32;
 
 pub struct Translator<'a> {
     instructions: [InstructionOrLink<'a>; TRANSLATOR_INSTRUCTIONS_CAPACITY],
     tokens: [Token; TRANSLATOR_TOKEN_CAPACITY],
     tokens_cursor_up: usize,
     tokens_cursor_down: usize,
+    tokens_cursor_context: usize,
     cursor: usize,
+    cursor_buff: usize,
+    cursor_down: usize,
+    translate_opts: TranslateOpts,
 }
 
 impl<'a> Translator<'a> {
+    #[allow(dead_code)]
     pub fn new() -> Self {
+        Self::new_with_opts(TranslateOpts::new())
+    }
+
+    pub fn new_with_opts(opts: TranslateOpts) -> Self {
         let instructions = {
             let x: [MaybeUninit<InstructionOrLink<'_>>; TRANSLATOR_INSTRUCTIONS_CAPACITY] =
                 unsafe { MaybeUninit::uninit().assume_init() };
@@ -48,6 +84,10 @@ impl<'a> Translator<'a> {
             cursor: 0,
             tokens_cursor_up: 0,
             tokens_cursor_down: 0,
+            tokens_cursor_context: 0,
+            cursor_buff: 0,
+            cursor_down: 0,
+            translate_opts: opts,
         }
     }
 
@@ -55,14 +95,23 @@ impl<'a> Translator<'a> {
         self.cursor = 0;
     }
 
-    pub fn instructions_to_symbols(&self, buff: &mut [u8]) -> usize {
-        let mut cursor = 0;
-        for il in self.instructions[..self.cursor].iter() {
+    pub fn reset_buffer(&mut self) {
+        self.cursor_buff = 0;
+    }
+
+    pub fn instructions_to_symbols(&mut self, buff: &mut [u8], chunk: usize) -> usize {
+        let mut cursor = self.cursor_buff;
+        let cursor_up = min(self.cursor_down + chunk, self.cursor);
+        for il in self.instructions[self.cursor_down..cursor_up].iter() {
+            self.cursor_down += 1;
             cursor += match il {
                 InstructionOrLink::I(i) => i.write_symbols(&mut buff[cursor..]),
                 InstructionOrLink::L(l) => {
                     let mut cursor2 = 0;
                     for i2 in l.iter() {
+                        if !self.instruction_is_needed(i2) {
+                            continue;
+                        }
                         cursor2 += i2.write_symbols(&mut buff[(cursor + cursor2)..]);
                         buff[cursor + cursor2] = b'\n';
                         cursor2 += 1;
@@ -73,23 +122,34 @@ impl<'a> Translator<'a> {
             buff[cursor] = b'\n';
             cursor += 1;
         }
-        cursor
+        let res = cursor - self.cursor_buff;
+        self.cursor_buff = cursor;
+        res
     }
 
     pub fn translate<'b, 'c>(&'b mut self, factory: &'c mut VariableFactory<'a>) {
-        while self.tokens_cursor_down % TRANSLATOR_TOKEN_CAPACITY
+        while self.tokens_cursor_context % TRANSLATOR_TOKEN_CAPACITY
             != self.tokens_cursor_up % TRANSLATOR_TOKEN_CAPACITY
         {
-            let raw_token =
-                &mut self.tokens[self.tokens_cursor_down % TRANSLATOR_TOKEN_CAPACITY] as *mut Token;
+            let raw_token = &mut self.tokens[self.tokens_cursor_context % TRANSLATOR_TOKEN_CAPACITY]
+                as *mut Token;
             let token = unsafe { &mut *raw_token };
-            self.tokens_cursor_down += 1;
-            match &mut token.payload {
-                TokenPayload::Branch(branch) => translate_branch_token(self, branch, factory),
-                TokenPayload::Memory(memory) => translate_memory_token(self, memory, factory),
-                TokenPayload::Arithmetic(arithmetic) => {
-                    translate_arithmetic_token(self, arithmetic, factory)
-                }
+            self.tokens_cursor_context += 1;
+            self.tokens_cursor_down = self.tokens_cursor_context;
+            self.run_for_token(token, factory)
+        }
+    }
+
+    fn run_for_token(&mut self, token: &mut Token, factory: &mut VariableFactory<'a>) {
+        // println!("{:?} {}", token.payload, self.cursor);
+        match &mut token.payload {
+            TokenPayload::Function(function) => {
+                translate_function_token(self, function, factory, token.instruction)
+            }
+            TokenPayload::Branch(branch) => translate_branch_token(self, branch, factory),
+            TokenPayload::Memory(memory) => translate_memory_token(self, memory, factory),
+            TokenPayload::Arithmetic(arithmetic) => {
+                translate_arithmetic_token(self, arithmetic, factory)
             }
         }
     }
@@ -113,13 +173,44 @@ impl<'a> Translator<'a> {
         }
     }
 
+    pub fn init_translator(&mut self, factory: &mut VariableFactory<'a>) {
+        self.save_link(&INIT_SP);
+        let init_function = b"Sys.init".to_vec();
+        self.save_token(Token {
+            src: 0,
+            instruction: 0,
+            payload: TokenPayload::Function(FunctionToken::Call(FunctionMetadata {
+                name: init_function,
+                args_count: 0,
+            })),
+        });
+        self.translate(factory);
+        self.save_instruction(instruction!(b"// Finish init"));
+    }
+
     pub fn save_instruction(&mut self, i: Instruction<'a>) -> bool {
+        if !self.instruction_is_needed(&i) {
+            return true;
+        }
+
         if self.cursor == TRANSLATOR_INSTRUCTIONS_CAPACITY {
             false
         } else {
             self.instructions[self.cursor] = InstructionOrLink::I(i);
             self.cursor += 1;
             true
+        }
+    }
+
+    fn instruction_is_needed(&self, i: &Instruction<'_>) -> bool {
+        if self.translate_opts.comments {
+            true
+        } else {
+            if let Instruction::Helper(HelperInstruction::Comment(_)) = i {
+                false
+            } else {
+                true
+            }
         }
     }
 }
@@ -141,7 +232,7 @@ mod tests {
         let mut t = Translator::new();
         assert!(t.save_instruction(instruction!(b"@SP")));
         let mut buff = [0; 100];
-        let l = t.instructions_to_symbols(&mut buff);
+        let l = t.instructions_to_symbols(&mut buff, 100);
         assert!(buff[..l] == *b"@SP\n")
     }
 
@@ -150,7 +241,7 @@ mod tests {
         let mut t = Translator::new();
         assert!(t.save_link(&PUSH_INSTRUCTIONS));
         let mut buff = [0; 100];
-        let l = t.instructions_to_symbols(&mut buff);
+        let l = t.instructions_to_symbols(&mut buff, 100);
         let answer = b"// Write value to SP from D\n@SP\nA=M\nM=D\n// Incriment sp\n@SP\nM=M+1\n";
         assert!(l == answer.len());
         assert!(buff[..l] == *answer)
@@ -163,7 +254,7 @@ mod tests {
         assert!(t.save_link(&PUSH_INSTRUCTIONS));
         assert!(t.save_instruction(instruction!(b"M=D")));
         let mut buff = [0; 100];
-        let l = t.instructions_to_symbols(&mut buff);
+        let l = t.instructions_to_symbols(&mut buff, 100);
         let answer = b"@THIS\n// Write value to SP from D\n@SP\nA=M\nM=D\n// Incriment sp\n@SP\nM=M+1\nM=D\n";
         assert!(l == answer.len());
         assert!(buff[..l] == *answer)
@@ -192,7 +283,7 @@ mod tests {
         t.save_token(token);
         t.translate(&mut factory);
 
-        let l = t.instructions_to_symbols(&mut buff);
+        let l = t.instructions_to_symbols(&mut buff, 100);
         let l2 = file.read(&mut file_buff).unwrap();
 
         assert!(buff[..l] == file_buff[..l2]);
@@ -217,7 +308,7 @@ mod tests {
         t.save_token(token);
         t.translate(&mut factory);
 
-        let l = t.instructions_to_symbols(&mut buff);
+        let l = t.instructions_to_symbols(&mut buff, 100);
         let l2 = file.read(&mut file_buff).unwrap();
 
         assert!(buff[..l] == file_buff[..l2]);
@@ -242,7 +333,7 @@ mod tests {
         t.save_token(token);
         t.translate(&mut factory);
 
-        let l = t.instructions_to_symbols(&mut buff);
+        let l = t.instructions_to_symbols(&mut buff, 100);
         let l2 = file.read(&mut file_buff).unwrap();
 
         assert!(buff[..l] == file_buff[..l2]);
@@ -267,7 +358,7 @@ mod tests {
         t.save_token(token);
         t.translate(&mut factory);
 
-        let l = t.instructions_to_symbols(&mut buff);
+        let l = t.instructions_to_symbols(&mut buff, 100);
         let l2 = file.read(&mut file_buff).unwrap();
 
         assert!(buff[..l] == file_buff[..l2]);
@@ -292,7 +383,7 @@ mod tests {
         t.save_token(token);
         t.translate(&mut factory);
 
-        let l = t.instructions_to_symbols(&mut buff);
+        let l = t.instructions_to_symbols(&mut buff, 100);
         let l2 = file.read(&mut file_buff).unwrap();
 
         assert!(buff[..l] == file_buff[..l2]);

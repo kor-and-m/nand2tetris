@@ -3,10 +3,10 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::{env, mem};
 
-use hack_ast::VariableFactory;
-use tokio::fs::OpenOptions;
+use hack_ast::{Instruction, VariableFactory};
+use tokio::fs::{read_dir, File, OpenOptions};
 use tokio::io::{self, AsyncWriteExt};
-use translator::Translator;
+use translator::{TranslateOpts, Translator};
 
 mod lexer;
 mod translator;
@@ -16,27 +16,79 @@ async fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
 
     let file_path = Path::new(&args[1]);
-    let mut lexer = lexer::VMLexer::new(&args[1]).await?;
-    let src_file_name = file_path.file_stem().expect("Wrong stem");
-    let mut factory = VariableFactory::new(src_file_name.as_bytes());
-    let mut translator = Translator::new();
-
-    let mut f_write_options = OpenOptions::new();
-
-    f_write_options.append(true).write(true).create(true);
-
-    let mut f_write = if args.len() > 2 {
-        f_write_options.open(&args[2]).await?
-    } else {
-        f_write_options
-            .open(file_path.with_extension("asm"))
-            .await?
-    };
 
     let mut buff = {
         let x: [MaybeUninit<u8>; 4096] = unsafe { MaybeUninit::uninit().assume_init() };
         unsafe { mem::transmute::<_, [u8; 4096]>(x) }
     };
+
+    let silent_comments = env::var("SILENT_COMMENTS").is_ok();
+    let mut opts = TranslateOpts::new();
+    opts.set_comments(!silent_comments);
+
+    let f = if file_path.is_dir() {
+        let mut b = file_path.to_path_buf();
+        let os_s = b.file_stem().unwrap();
+        let s = format!("{}.asm", os_s.to_str().unwrap());
+        b.push(&s);
+        b
+    } else {
+        file_path.with_extension("asm")
+    };
+
+    let write_file_path = if args.len() > 2 {
+        Path::new(&args[2])
+    } else {
+        f.as_path()
+    };
+
+    let mut f_write = open_write_file(write_file_path).await?;
+
+    if file_path.is_dir() {
+        let mut paths = read_dir(file_path).await.unwrap();
+        let mut translator = Translator::new_with_opts(opts);
+        let mut factory = VariableFactory::new(b"initial_call");
+        translator.init_translator(&mut factory);
+        let l = translator.instructions_to_symbols(&mut buff, 100);
+        f_write.write(&mut buff[..l]).await.unwrap();
+
+        while let Some(path) = paths.next_entry().await? {
+            let path_type = path.path();
+            let ext = path_type.extension().unwrap();
+            if let Some("vm") = ext.to_str() {
+                translate_file(path_type.as_path(), &mut f_write, &mut buff, opts).await?
+            }
+        }
+
+        Ok(())
+    } else {
+        translate_file(&file_path, &mut f_write, &mut buff, opts).await
+    }
+}
+
+async fn open_write_file(file_path: &Path) -> io::Result<File> {
+    let mut f_write_options = OpenOptions::new();
+    f_write_options.append(true).write(true).create(true);
+    let f_write = f_write_options.open(file_path).await?;
+    f_write.set_len(0).await.unwrap();
+    Ok(f_write)
+}
+
+async fn translate_file(
+    file_path: &Path,
+    f_write: &mut File,
+    buff: &mut [u8],
+    opts: TranslateOpts,
+) -> io::Result<()> {
+    let mut lexer = lexer::VMLexer::new(file_path.to_str().unwrap()).await?;
+    let src_file_name = file_path.file_stem().expect("Wrong stem");
+    let file_parse_comment = format!("Start parsing {}", src_file_name.to_str().unwrap());
+    let mut factory = VariableFactory::new(src_file_name.as_bytes());
+    let mut translator = Translator::new_with_opts(opts);
+
+    translator.save_instruction(Instruction::new_line());
+    translator.save_instruction(Instruction::new_line());
+    translator.save_instruction(Instruction::new_comment(file_parse_comment.as_bytes()));
 
     'outer: loop {
         let space = translator.check_free_space();
@@ -46,18 +98,31 @@ async fn main() -> io::Result<()> {
                 translator.save_token(token);
             } else {
                 translator.translate(&mut factory);
-                let l = translator.instructions_to_symbols(&mut buff);
-                f_write.write(&mut buff[..l]).await.unwrap();
-                translator.reset();
+                write_chunks(&mut translator, f_write, buff).await?;
                 break 'outer;
             }
         }
 
         translator.translate(&mut factory);
-        let l = translator.instructions_to_symbols(&mut buff);
-        f_write.write_all(&mut buff[..l]).await.unwrap();
+        write_chunks(&mut translator, f_write, buff).await?;
         translator.reset();
     }
 
+    Ok(())
+}
+
+async fn write_chunks(
+    translator: &mut Translator<'_>,
+    f_write: &mut File,
+    buff: &mut [u8],
+) -> io::Result<()> {
+    loop {
+        let l = translator.instructions_to_symbols(buff, 100);
+        if l == 0 {
+            break;
+        }
+        f_write.write(&mut buff[..l]).await.unwrap();
+        translator.reset_buffer();
+    }
     Ok(())
 }

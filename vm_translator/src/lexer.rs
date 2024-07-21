@@ -157,6 +157,13 @@ impl VMLexer {
             [b'a', b'n', b'd', ..] => self.build_arithmetic_token(ArithmeticToken::And),
             [b'o', b'r', ..] => self.build_arithmetic_token(ArithmeticToken::Or),
             [b'n', b'o', b't', ..] => self.build_arithmetic_token(ArithmeticToken::Not),
+            [b'r', b'e', b't', b'u', b'r', b'n', ..] => {
+                TokenPayload::Function(FunctionToken::Return)
+            }
+            [b'f', b'u', b'n', b'c', b't', b'i', b'o', b'n', ..] => {
+                self.build_function_token(true).await
+            }
+            [b'c', b'a', b'l', b'l', ..] => self.build_function_token(false).await,
             [b'l', b'a', b'b', b'e', b'l', ..] => {
                 self.build_branch_token(BranchTokenKind::Label).await
             }
@@ -180,6 +187,27 @@ impl VMLexer {
         })
     }
 
+    async fn build_function_token(&mut self, is_definition: bool) -> TokenPayload {
+        let name = self.next_word().await.unwrap().to_vec();
+        let args_count_bytes = self.next_word().await.unwrap();
+
+        let args_count = match args_count_bytes.len() {
+            0 => unreachable!(),
+            1 => parse_an_int_val(args_count_bytes[0]),
+            2 => parse_an_int_val(args_count_bytes[0]) * 10 + parse_an_int_val(args_count_bytes[1]),
+            _ => panic!("Too much args"),
+        };
+
+        if is_definition {
+            TokenPayload::Function(FunctionToken::Definition(FunctionMetadata {
+                name,
+                args_count,
+            }))
+        } else {
+            TokenPayload::Function(FunctionToken::Call(FunctionMetadata { name, args_count }))
+        }
+    }
+
     fn build_arithmetic_token(&mut self, kind: ArithmeticToken) -> TokenPayload {
         TokenPayload::Arithmetic(kind)
     }
@@ -190,5 +218,21 @@ impl VMLexer {
             instruction: self.instruction_number,
             src: self.src_line,
         }
+    }
+}
+
+fn parse_an_int_val(i: u8) -> i16 {
+    match i {
+        b'0' => 0,
+        b'1' => 1,
+        b'2' => 2,
+        b'3' => 3,
+        b'4' => 4,
+        b'5' => 5,
+        b'6' => 6,
+        b'7' => 7,
+        b'8' => 8,
+        b'9' => 9,
+        _ => panic!("Count args must be an integer"),
     }
 }

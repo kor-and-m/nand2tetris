@@ -115,7 +115,7 @@ fn should_be_prepared(token: &MemoryToken) -> bool {
     }
 }
 
-fn segment_as_instruction(segment: MemoryTokenSegment) -> Instruction<'static> {
+pub fn segment_as_instruction(segment: MemoryTokenSegment) -> Instruction<'static> {
     match segment {
         MemoryTokenSegment::Arg => instruction!(b"@ARG"),
         MemoryTokenSegment::Local => instruction!(b"@LCL"),
@@ -146,7 +146,7 @@ mod tests {
         let mut t = Translator::new();
 
         translate_memory_token(&mut t, &token, &mut factory);
-        let l = t.instructions_to_symbols(&mut buff);
+        let l = t.instructions_to_symbols(&mut buff, 100);
 
         let l2 = file.read(&mut file_buff).unwrap();
 
@@ -166,7 +166,7 @@ mod tests {
         let mut t = Translator::new();
 
         translate_memory_token(&mut t, &token, &mut factory);
-        let l = t.instructions_to_symbols(&mut buff);
+        let l = t.instructions_to_symbols(&mut buff, 100);
         let l2 = file.read(&mut file_buff).unwrap();
 
         assert!(buff[..l] == file_buff[..l2]);
@@ -185,7 +185,7 @@ mod tests {
         let mut t = Translator::new();
 
         translate_memory_token(&mut t, &token, &mut factory);
-        let l = t.instructions_to_symbols(&mut buff);
+        let l = t.instructions_to_symbols(&mut buff, 100);
         let l2 = file.read(&mut file_buff).unwrap();
 
         assert!(buff[..l] == file_buff[..l2]);
@@ -204,7 +204,7 @@ mod tests {
         let mut t = Translator::new();
 
         translate_memory_token(&mut t, &token, &mut factory);
-        let l = t.instructions_to_symbols(&mut buff);
+        let l = t.instructions_to_symbols(&mut buff, 100);
         let l2 = file.read(&mut file_buff).unwrap();
 
         assert!(buff[..l] == file_buff[..l2]);
@@ -223,7 +223,7 @@ mod tests {
         let mut t = Translator::new();
 
         translate_memory_token(&mut t, &token, &mut factory);
-        let l = t.instructions_to_symbols(&mut buff);
+        let l = t.instructions_to_symbols(&mut buff, 100);
         let l2 = file.read(&mut file_buff).unwrap();
 
         assert!(buff[..l] == file_buff[..l2]);
@@ -242,7 +242,7 @@ mod tests {
         let mut t = Translator::new();
 
         translate_memory_token(&mut t, &token, &mut factory);
-        let l = t.instructions_to_symbols(&mut buff);
+        let l = t.instructions_to_symbols(&mut buff, 100);
         let l2 = file.read(&mut file_buff).unwrap();
 
         assert!(buff[..l] == file_buff[..l2]);
@@ -261,7 +261,7 @@ mod tests {
         let mut t = Translator::new();
 
         translate_memory_token(&mut t, &token, &mut factory);
-        let l = t.instructions_to_symbols(&mut buff);
+        let l = t.instructions_to_symbols(&mut buff, 100);
         let l2 = file.read(&mut file_buff).unwrap();
 
         assert!(buff[..l] == file_buff[..l2]);
@@ -280,7 +280,7 @@ mod tests {
         let mut t = Translator::new();
 
         translate_memory_token(&mut t, &token, &mut factory);
-        let l = t.instructions_to_symbols(&mut buff);
+        let l = t.instructions_to_symbols(&mut buff, 100);
         let l2 = file.read(&mut file_buff).unwrap();
 
         assert!(buff[..l] == file_buff[..l2]);
@@ -299,7 +299,7 @@ mod tests {
         let mut t = Translator::new();
 
         translate_memory_token(&mut t, &token, &mut factory);
-        let l = t.instructions_to_symbols(&mut buff);
+        let l = t.instructions_to_symbols(&mut buff, 100);
         let l2 = file.read(&mut file_buff).unwrap();
 
         assert!(buff[..l] == file_buff[..l2]);
@@ -318,7 +318,7 @@ mod tests {
         let mut t = Translator::new();
 
         translate_memory_token(&mut t, &token, &mut factory);
-        let l = t.instructions_to_symbols(&mut buff);
+        let l = t.instructions_to_symbols(&mut buff, 100);
         let l2 = file.read(&mut file_buff).unwrap();
 
         assert!(buff[..l] == file_buff[..l2]);
@@ -337,7 +337,7 @@ mod tests {
         let mut t = Translator::new();
 
         translate_memory_token(&mut t, &token, &mut factory);
-        let l = t.instructions_to_symbols(&mut buff);
+        let l = t.instructions_to_symbols(&mut buff, 100);
         let l2 = file.read(&mut file_buff).unwrap();
 
         assert!(buff[..l] == file_buff[..l2]);
@@ -356,7 +356,7 @@ mod tests {
         let mut t = Translator::new();
 
         translate_memory_token(&mut t, &token, &mut factory);
-        let l = t.instructions_to_symbols(&mut buff);
+        let l = t.instructions_to_symbols(&mut buff, 100);
         let l2 = file.read(&mut file_buff).unwrap();
 
         assert!(buff[..l] == file_buff[..l2]);
@@ -375,7 +375,7 @@ mod tests {
         let mut t = Translator::new();
 
         translate_memory_token(&mut t, &token, &mut factory);
-        let l = t.instructions_to_symbols(&mut buff);
+        let l = t.instructions_to_symbols(&mut buff, 100);
         let l2 = file.read(&mut file_buff).unwrap();
 
         assert!(buff[..l] == file_buff[..l2]);
@@ -394,7 +394,7 @@ mod tests {
         let mut t = Translator::new();
 
         translate_memory_token(&mut t, &token, &mut factory);
-        let l = t.instructions_to_symbols(&mut buff);
+        let l = t.instructions_to_symbols(&mut buff, 100);
         let l2 = file.read(&mut file_buff).unwrap();
 
         assert!(buff[..l] == file_buff[..l2]);
@@ -413,7 +413,7 @@ mod tests {
         let mut t = Translator::new();
 
         translate_memory_token(&mut t, &token, &mut factory);
-        let l = t.instructions_to_symbols(&mut buff);
+        let l = t.instructions_to_symbols(&mut buff, 100);
         let l2 = file.read(&mut file_buff).unwrap();
 
         assert!(buff[..l] == file_buff[..l2]);
@@ -432,7 +432,7 @@ mod tests {
         let mut t = Translator::new();
 
         translate_memory_token(&mut t, &token, &mut factory);
-        let l = t.instructions_to_symbols(&mut buff);
+        let l = t.instructions_to_symbols(&mut buff, 100);
         let l2 = file.read(&mut file_buff).unwrap();
 
         assert!(buff[..l] == file_buff[..l2]);
@@ -451,7 +451,7 @@ mod tests {
         let mut t = Translator::new();
 
         translate_memory_token(&mut t, &token, &mut factory);
-        let l = t.instructions_to_symbols(&mut buff);
+        let l = t.instructions_to_symbols(&mut buff, 100);
         let l2 = file.read(&mut file_buff).unwrap();
 
         assert!(buff[..l] == file_buff[..l2]);
