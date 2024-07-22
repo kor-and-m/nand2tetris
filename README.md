@@ -1,4 +1,4 @@
-# Two tier compiler from https://www.nand2tetris.org/
+# Two tier compiler for https://www.nand2tetris.org/ project
 
 ## Translate .vm to hack .asm
 ```
