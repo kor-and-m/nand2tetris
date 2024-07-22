@@ -2,7 +2,7 @@ use std::mem;
 
 use hack_ast::*;
 use hack_macro::instruction;
-use vm_tokens::{BranchToken, BranchTokenKind};
+use vm_parser::tokens::{BranchToken, BranchTokenKind};
 
 use super::{constants::POP_INSTRUCTIONS, Translator};
 

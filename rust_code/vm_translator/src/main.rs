@@ -10,7 +10,6 @@ use tokio::fs::{read_dir, File, OpenOptions};
 use tokio::io::{self, AsyncWriteExt};
 use translator::{TranslateOpts, Translator};
 
-mod lexer;
 mod translator;
 
 #[tokio::main]
@@ -111,7 +110,7 @@ async fn translate_file(
     static_pointer: &mut i16,
     static_map: &mut HashMap<Vec<u8>, String>,
 ) -> io::Result<()> {
-    let mut lexer = lexer::VMLexer::new(file_path.to_str().unwrap()).await?;
+    let mut parser = vm_parser::VMParser::new(file_path.to_str().unwrap()).await?;
     let src_file_name = file_path.file_stem().expect("Wrong stem");
     let file_parse_comment = format!("Start parsing {}", src_file_name.to_str().unwrap());
     let mut factory = VariableFactory::new(src_file_name.as_bytes());
@@ -125,7 +124,7 @@ async fn translate_file(
         let space = translator.check_free_space();
 
         for _i in 0..space {
-            if let Some(token) = lexer.next_token().await {
+            if let Some(token) = parser.next_token().await {
                 translator.save_token(token);
             } else {
                 translator.translate(&mut factory);

@@ -1,7 +1,7 @@
 use hack_ast::*;
 use hack_macro::instruction;
 
-use vm_tokens::ArithmeticToken;
+use vm_parser::tokens::ArithmeticToken;
 
 use super::{constants::POP_INSTRUCTIONS, model::Translator};
 

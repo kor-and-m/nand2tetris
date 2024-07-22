@@ -1,9 +1,10 @@
 [package]
-name = "vm_tokens"
+name = "vm_parser"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+tokio = { version = "1", features = ["full"] }
 phf = { version = "0.11.2", features = ["macros"] }
 hack_macro = { path = "../hack_macro" }
 symbolic = { path = "../symbolic" }

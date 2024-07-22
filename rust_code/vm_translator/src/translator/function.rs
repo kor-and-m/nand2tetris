@@ -2,7 +2,7 @@ use std::mem;
 
 use hack_ast::*;
 use hack_macro::instruction;
-use vm_tokens::{
+use vm_parser::tokens::{
     BranchToken, BranchTokenKind, FunctionMetadata, FunctionToken, MemoryToken, MemoryTokenKind,
     MemoryTokenSegment,
 };

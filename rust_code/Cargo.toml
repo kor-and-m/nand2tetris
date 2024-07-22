@@ -1,6 +1,8 @@
 [workspace]
 
 members = [ "hack_ast",
-    "hack_macro", "symbolic", "vm_tokens",
+    "hack_macro",
+    "symbolic",
+    "vm_parser",
     "vm_translator",
 ]

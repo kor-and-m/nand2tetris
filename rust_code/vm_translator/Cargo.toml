@@ -13,4 +13,4 @@ phf = { version = "0.11.2", features = ["macros"] }
 hack_macro = { path = "../hack_macro" }
 hack_ast = { path = "../hack_ast" }
 symbolic = { path = "../symbolic" }
-vm_tokens = { path = "../vm_tokens" }
+vm_parser = { path = "../vm_parser" }

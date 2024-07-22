@@ -8,7 +8,7 @@ use hack_ast::*;
 
 use hack_macro::instruction;
 use symbolic::SymbolicElem;
-use vm_tokens::{FunctionMetadata, FunctionToken, Token, TokenPayload};
+use vm_parser::tokens::{FunctionMetadata, FunctionToken, Token, TokenPayload};
 
 use super::{
     arithmetic::translate_arithmetic_token, branch::translate_branch_token,
@@ -275,7 +275,7 @@ mod tests {
     use std::io::prelude::*;
 
     use crate::translator::constants::PUSH_INSTRUCTIONS;
-    use vm_tokens::{ArithmeticToken, MemoryToken, MemoryTokenKind, MemoryTokenSegment};
+    use vm_parser::tokens::{ArithmeticToken, MemoryToken, MemoryTokenKind, MemoryTokenSegment};
 
     use super::*;
 

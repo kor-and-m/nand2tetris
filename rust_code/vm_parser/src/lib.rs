@@ -3,14 +3,16 @@ use std::path::Path;
 use tokio::fs::File;
 use tokio::io::{self, AsyncReadExt};
 
-use vm_tokens::*;
+pub mod tokens;
 
-const LEXER_BUFFER_SIZE: usize = 4096;
+use tokens::*;
+
+const PARSER_BUFFER_SIZE: usize = 4096;
 
 #[derive(Debug)]
-pub struct VMLexer {
+pub struct VMParser {
     file: File,
-    buffer: [u8; LEXER_BUFFER_SIZE],
+    buffer: [u8; PARSER_BUFFER_SIZE],
     cursor: usize,
     end_word_cursor: usize,
     end_page_cursor: usize,
@@ -20,7 +22,7 @@ pub struct VMLexer {
     is_in_progress: bool,
 }
 
-impl VMLexer {
+impl VMParser {
     pub async fn new(path: &str) -> io::Result<Self> {
         let file_path = Path::new(&path);
         if file_path.extension().expect("File extension undefined") != "vm" {
@@ -31,9 +33,9 @@ impl VMLexer {
 
         let mut self_state = Self {
             file,
-            buffer: [0; LEXER_BUFFER_SIZE],
-            cursor: LEXER_BUFFER_SIZE,
-            end_word_cursor: LEXER_BUFFER_SIZE,
+            buffer: [0; PARSER_BUFFER_SIZE],
+            cursor: PARSER_BUFFER_SIZE,
+            end_word_cursor: PARSER_BUFFER_SIZE,
             end_page_cursor: 0,
             is_eof: false,
             is_in_progress: false,
@@ -45,9 +47,9 @@ impl VMLexer {
     }
 
     async fn fill_buffer(&mut self) -> io::Result<()> {
-        let to_copy = LEXER_BUFFER_SIZE - self.cursor;
+        let to_copy = PARSER_BUFFER_SIZE - self.cursor;
 
-        // becouse token size can't be bigger than LEXER_BUFFER_SIZE / 2
+        // becouse token size can't be bigger than PARSER_BUFFER_SIZE / 2
         let p = self.buffer.as_mut_ptr();
         unsafe {
             std::ptr::copy_nonoverlapping(p.add(self.cursor), p, to_copy);
@@ -213,7 +215,7 @@ impl VMLexer {
     }
 
     fn enrich_token_payload(&self, payload: TokenPayload) -> Token {
-        vm_tokens::Token {
+        Token {
             payload,
             instruction: self.instruction_number,
             src: self.src_line,

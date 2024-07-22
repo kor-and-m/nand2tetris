@@ -1,7 +1,7 @@
 use hack_ast::*;
 use hack_macro::instruction;
 
-use vm_tokens::{MemoryToken, MemoryTokenKind, MemoryTokenSegment};
+use vm_parser::tokens::{MemoryToken, MemoryTokenKind, MemoryTokenSegment};
 
 use super::constants::{POP_INSTRUCTIONS, PUSH_INSTRUCTIONS};
 use super::model::Translator;
@@ -132,7 +132,7 @@ mod tests {
     use std::fs::File;
     use std::io::prelude::*;
 
-    use vm_tokens::{MemoryToken, MemoryTokenKind, MemoryTokenSegment};
+    use vm_parser::tokens::{MemoryToken, MemoryTokenKind, MemoryTokenSegment};
 
     #[test]
     fn translate_const_44_push_answer_test() {
