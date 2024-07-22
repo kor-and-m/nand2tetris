@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ffi::OsStr;
 use std::mem::MaybeUninit;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
@@ -63,8 +64,8 @@ async fn main() -> io::Result<()> {
 
         while let Some(path) = paths.next_entry().await? {
             let path_type = path.path();
-            let ext = path_type.extension().unwrap();
-            if let Some("vm") = ext.to_str() {
+            let vm_extension = Some(OsStr::new("vm"));
+            if vm_extension == path_type.extension() {
                 translate_file(
                     path_type.as_path(),
                     &mut f_write,
