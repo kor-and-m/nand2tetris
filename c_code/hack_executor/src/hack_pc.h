@@ -1,0 +1,1 @@
+short perform_jump(short pc, short result, short a, short i);

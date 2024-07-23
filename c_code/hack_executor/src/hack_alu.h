@@ -1,0 +1,1 @@
+short hack_alu_perform(short * memory, short a, short d, short i);
