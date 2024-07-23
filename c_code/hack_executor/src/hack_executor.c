@@ -45,7 +45,9 @@ short read_memory(HackExecutor * executor, short pointer) {
 void save_result(HackExecutor * executor, short result, short i) {
     if (i >= 0) {
         executor->a = result;
+        return;
     }
+
     short result_code = (short) ((i >> 3) & 0b111);
     if (result_code & 0b1) {
         set_hack_memory(executor->memory, executor->a, result);

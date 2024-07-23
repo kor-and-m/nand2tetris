@@ -5,11 +5,13 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::{env, mem};
 
+use context::FileContext;
 use hack_ast::{Instruction, VariableFactory};
 use tokio::fs::{read_dir, File, OpenOptions};
-use tokio::io::{self, AsyncWriteExt};
+use tokio::io::{self, AsyncSeekExt, AsyncWriteExt};
 use translator::{TranslateOpts, Translator};
 
+mod context;
 mod translator;
 
 #[tokio::main]
@@ -49,17 +51,25 @@ async fn main() -> io::Result<()> {
     let mut pointer = 16;
     let mut static_map = HashMap::new();
 
+    let mut file_context = FileContext::new();
+
     if file_path.is_dir() {
         let mut paths = read_dir(file_path).await.unwrap();
         let mut translator = Translator::new_with_opts(opts);
         let mut factory = VariableFactory::new(b"initial_call");
         translator.init_translator(&mut factory);
         let l = if binary_target {
-            translator.instructions_to_bytes(&mut buff, 100, &mut pointer, &mut static_map)
+            translator.instructions_to_bytes(
+                &mut buff,
+                100,
+                &mut pointer,
+                &mut static_map,
+                &mut file_context,
+            )
         } else {
             translator.instructions_to_symbols(&mut buff, 100)
         };
-        f_write.write(&mut buff[..l]).await.unwrap();
+        file_context.set_new_pointer(f_write.write(&mut buff[..l]).await.unwrap());
 
         while let Some(path) = paths.next_entry().await? {
             let path_type = path.path();
@@ -73,12 +83,11 @@ async fn main() -> io::Result<()> {
                     binary_target,
                     &mut pointer,
                     &mut static_map,
+                    &mut file_context,
                 )
                 .await?
             }
         }
-
-        Ok(())
     } else {
         translate_file(
             &file_path,
@@ -88,9 +97,24 @@ async fn main() -> io::Result<()> {
             binary_target,
             &mut pointer,
             &mut static_map,
+            &mut file_context,
         )
-        .await
+        .await?
+    };
+
+    drop(f_write);
+
+    let mut f2_write = OpenOptions::new().write(true).open(write_file_path).await?;
+
+    for (label, idxs) in file_context.pointer_map.iter() {
+        for idx in idxs {
+            f2_write.seek(io::SeekFrom::Start(*idx as u64)).await?;
+            let value = static_map.get(label).unwrap();
+            f2_write.write(value.as_bytes()).await?;
+        }
     }
+
+    Ok(())
 }
 
 async fn open_write_file(file_path: &Path) -> io::Result<File> {
@@ -109,6 +133,7 @@ async fn translate_file(
     binary_target: bool,
     static_pointer: &mut i16,
     static_map: &mut HashMap<Vec<u8>, String>,
+    file_pointer: &mut FileContext,
 ) -> io::Result<()> {
     let mut parser = vm_parser::VMParser::new(file_path.to_str().unwrap()).await?;
     let src_file_name = file_path.file_stem().expect("Wrong stem");
@@ -135,6 +160,7 @@ async fn translate_file(
                     binary_target,
                     static_pointer,
                     static_map,
+                    file_pointer,
                 )
                 .await?;
                 break 'outer;
@@ -149,6 +175,7 @@ async fn translate_file(
             binary_target,
             static_pointer,
             static_map,
+            file_pointer,
         )
         .await?;
         translator.reset();
@@ -164,18 +191,21 @@ async fn write_chunks(
     binary_target: bool,
     static_pointer: &mut i16,
     static_map: &mut HashMap<Vec<u8>, String>,
+    file_pointer: &mut FileContext,
 ) -> io::Result<()> {
+    let mut sum = 0;
     loop {
         let l = if binary_target {
-            translator.instructions_to_bytes(buff, 100, static_pointer, static_map)
+            translator.instructions_to_bytes(buff, 100, static_pointer, static_map, file_pointer)
         } else {
             translator.instructions_to_symbols(buff, 100)
         };
         if l == 0 {
             break;
         }
-        f_write.write(&mut buff[..l]).await.unwrap();
+        sum += f_write.write(&mut buff[..l]).await.unwrap();
         translator.reset_buffer();
     }
+    file_pointer.set_new_pointer(sum);
     Ok(())
 }

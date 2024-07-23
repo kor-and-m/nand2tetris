@@ -29,14 +29,14 @@ macro_rules! write_instruction_set_symbols {
 
 #[macro_export]
 macro_rules! write_instruction_set_bin {
-    ( $buff:expr, $variable_pointer:expr, $variable_static_map:expr, $( $x:expr ),* ) => {
+    ( $buff:expr, $variable_pointer:expr, $instruction_number:expr, $variable_static_map:expr, $( $x:expr ),* ) => {
         {
             let mut cursor = 0;
             let variable_pointer = $variable_pointer;
             let mut m = $variable_static_map;
             $(
                 for i in $x.iter() {
-                    let cursor_incr = i.write_bytes(&mut $buff[cursor..], variable_pointer, &mut m);
+                    let (cursor_incr, _) = i.write_bytes(&mut $buff[cursor..], variable_pointer, $instruction_number, &mut m);
                     cursor += cursor_incr;
 
                     if cursor_incr > 0 {
@@ -82,18 +82,19 @@ impl Instruction<'_> {
         &self,
         buff: &mut [u8],
         variable_pointer: &mut i16,
+        instruction_number: usize,
         m: &mut HashMap<Vec<u8>, String>,
-    ) -> usize {
+    ) -> (usize, Option<Vec<u8>>) {
         match self {
             Self::A(a) => {
                 a.write_bytes(buff, variable_pointer, m);
-                16
+                (16, None)
             }
             Self::C(c) => {
                 c.write_bytes(buff);
-                16
+                (16, None)
             }
-            Self::Helper(_) => 0,
+            Self::Helper(h) => h.write_bytes(buff, instruction_number, m),
         }
     }
 }
@@ -347,7 +348,7 @@ mod tests {
         let mut buff = [0u8; 500];
         let mut m = HashMap::new();
 
-        sp.write_bytes(&mut buff, &mut 400, &mut m);
+        sp.write_bytes(&mut buff, &mut 400, 1, &mut m);
         assert_eq!(buff[..16], *b"0000000000000000")
     }
 
@@ -357,7 +358,7 @@ mod tests {
         let mut m = HashMap::new();
 
         let a_eq_m = instruction!(b"D=A");
-        a_eq_m.write_bytes(&mut buff, &mut 400, &mut m);
+        a_eq_m.write_bytes(&mut buff, &mut 400, 1, &mut m);
         assert_eq!(buff[..16], *b"1110110000010000");
     }
 
@@ -375,6 +376,7 @@ mod tests {
         let l = write_instruction_set_bin!(
             &mut buff,
             &mut k,
+            10,
             m,
             &[instruction!(b"@11")],
             &PUSH_INSTRUCTION_SET,
@@ -382,7 +384,6 @@ mod tests {
         );
 
         assert_eq!(k, 102);
-        println!("{}", from_utf8(&buff[..l]).unwrap());
 
         assert_eq!(
             from_utf8(&buff[..l])

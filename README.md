@@ -3,15 +3,23 @@
 ## Translate .vm to hack .asm
 ```
 cd rust_code
-cargo run -- ../static/vm/FibonacciElement
+cargo run -p vm_translator -- ../static/vm/FibonacciElement
 cat ../static/vm/FibonacciElement/FibonacciElement.asm
 ```
 
 ## Translate .vm to .hack (preaty printed)
 ```
 cd rust_code
-TO_BINARY=1 cargo run -- ../static/vm/FibonacciElemen
+TO_BINARY=1 cargo run -p vm_translator -- ../static/vm/FibonacciElemen
 cat ../static/vm/FibonacciElement/FibonacciElement.hack
+```
+
+## Execute .hack (preaty printed)
+```
+cd c_code/hack_executor
+make compile
+cd ../../rust_code
+cargo run -p hack_executor -- ../static/vm/FibonacciElement/FibonacciElement.hack
 ```
 
 ## TODO

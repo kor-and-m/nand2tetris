@@ -10,6 +10,8 @@ use hack_macro::instruction;
 use symbolic::SymbolicElem;
 use vm_parser::tokens::{FunctionMetadata, FunctionToken, Token, TokenPayload};
 
+use crate::context::FileContext;
+
 use super::{
     arithmetic::translate_arithmetic_token, branch::translate_branch_token,
     function::translate_function_token, memory::translate_memory_token,
@@ -56,6 +58,7 @@ pub struct Translator<'a> {
     cursor_buff: usize,
     cursor_down: usize,
     translate_opts: TranslateOpts,
+    instruction_counter: usize,
 }
 
 impl<'a> Translator<'a> {
@@ -88,6 +91,7 @@ impl<'a> Translator<'a> {
             tokens_cursor_context: 0,
             cursor_buff: 0,
             cursor_down: 0,
+            instruction_counter: 0,
             translate_opts: opts,
         }
     }
@@ -134,6 +138,7 @@ impl<'a> Translator<'a> {
         chunk: usize,
         static_pointer: &mut i16,
         static_map: &mut HashMap<Vec<u8>, String>,
+        file_context: &mut FileContext,
     ) -> usize {
         let mut cursor = self.cursor_buff;
         let cursor_up = min(self.cursor_down + chunk, self.cursor);
@@ -141,7 +146,23 @@ impl<'a> Translator<'a> {
             self.cursor_down += 1;
             let l1 = match il {
                 InstructionOrLink::I(i) => {
-                    i.write_bytes(&mut buff[cursor..], static_pointer, static_map)
+                    if !self.instruction_is_needed(i) {
+                        continue;
+                    }
+                    let (l, maybe_val_to_save) = i.write_bytes(
+                        &mut buff[cursor..],
+                        static_pointer,
+                        file_context.global_instruction_number(self.instruction_counter),
+                        static_map,
+                    );
+                    if let Some(val_to_save) = maybe_val_to_save {
+                        file_context.set_intruction(val_to_save, self.instruction_counter)
+                    }
+
+                    if l != 0 {
+                        self.instruction_counter += 1;
+                    }
+                    l
                 }
                 InstructionOrLink::L(l) => {
                     let mut cursor2 = 0;
@@ -149,13 +170,19 @@ impl<'a> Translator<'a> {
                         if !self.instruction_is_needed(i2) {
                             continue;
                         }
-                        let l2 = i2.write_bytes(
+                        let (l2, maybe_val_to_save) = i2.write_bytes(
                             &mut buff[(cursor + cursor2)..],
                             static_pointer,
+                            file_context.global_instruction_number(self.instruction_counter),
                             static_map,
                         );
 
+                        if let Some(val_to_save) = maybe_val_to_save {
+                            file_context.set_intruction(val_to_save, self.instruction_counter)
+                        }
+
                         if l2 != 0 {
+                            self.instruction_counter += 1;
                             cursor2 += l2;
                             buff[cursor + cursor2] = b'\n';
                             cursor2 += 1;
@@ -193,7 +220,6 @@ impl<'a> Translator<'a> {
     }
 
     fn run_for_token(&mut self, token: &mut Token, factory: &mut VariableFactory<'a>) {
-        // println!("{:?} {}", token.payload, self.cursor);
         match &mut token.payload {
             TokenPayload::Function(function) => {
                 translate_function_token(self, function, factory, token.instruction)

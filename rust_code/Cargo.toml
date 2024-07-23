@@ -1,6 +1,8 @@
 [workspace]
 
-members = [ "hack_ast",
+members = [
+    "hack_ast",
+    "hack_executor",
     "hack_macro",
     "symbolic",
     "vm_parser",
