@@ -16,6 +16,7 @@ cat ../static/vm/FibonacciElement/FibonacciElement.hack
 
 ## Execute .hack (preaty printed)
 ```
+git submodule init
 cd c_code/hack_executor
 make compile
 cd ../../rust_code
