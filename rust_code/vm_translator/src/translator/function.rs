@@ -1,10 +1,10 @@
 use std::mem;
 
-use hack_ast::*;
+use hack_instructions::*;
 use hack_macro::instruction;
-use vm_parser::tokens::{
-    BranchToken, BranchTokenKind, FunctionMetadata, FunctionToken, MemoryToken, MemoryTokenKind,
-    MemoryTokenSegment,
+use vm_parser::{
+    AsmBranchInstruction, AsmBranchInstructionKind, AsmFunctionInstruction, AsmMemoryInstruction,
+    AsmMemoryInstructionKind, AsmMemoryInstructionSegment, FunctionMetadata,
 };
 
 use super::branch::translate_branch_token;
@@ -62,20 +62,20 @@ const RETURN_FROM_R14: [Instruction<'static>; 3] = [
 
 pub fn translate_function_token<'a, 'b>(
     translator: &'a mut Translator<'b>,
-    token: &'a mut FunctionToken,
+    token: &'a mut AsmFunctionInstruction,
     factory: &'a mut VariableFactory<'b>,
     instruction_id: usize,
 ) {
     match token {
-        FunctionToken::Call(meta) => {
+        AsmFunctionInstruction::Call(meta) => {
             let b_tmp = instruction_id.to_string();
             let b = b_tmp.as_bytes();
             call(translator, b, meta, factory)
         }
-        FunctionToken::Definition(meta) => {
+        AsmFunctionInstruction::Definition(meta) => {
             let v = mem::replace(&mut meta.name, Vec::new());
-            let mut label_token = BranchToken {
-                kind: BranchTokenKind::Label,
+            let mut label_token = AsmBranchInstruction {
+                kind: AsmBranchInstructionKind::Label,
                 name: v,
             };
             translator.save_instruction(Instruction::new_line());
@@ -88,15 +88,15 @@ pub fn translate_function_token<'a, 'b>(
             }
             translator.save_instruction(instruction!(b"// Execute body"));
         }
-        FunctionToken::Return => {
+        AsmFunctionInstruction::Return => {
             translator.save_instruction(instruction!(
                 b"// Save return address in case zero arguments"
             ));
             translator.save_link(&SAVE_RETURN_TO_R14);
             translator.save_instruction(instruction!(b"// Push value to zero ARG"));
-            let memory_token = MemoryToken {
-                segment: MemoryTokenSegment::Arg,
-                kind: MemoryTokenKind::Pop,
+            let memory_token = AsmMemoryInstruction {
+                segment: AsmMemoryInstructionSegment::Arg,
+                kind: AsmMemoryInstructionKind::Pop,
                 val: 0,
             };
             translate_memory_token(translator, &memory_token, factory);
@@ -104,10 +104,10 @@ pub fn translate_function_token<'a, 'b>(
             translator.save_link(&MOVE_SP_TO_COLLER);
             translator.save_link(&SAVE_PARENT_SP_TO_R13);
             translator.save_instruction(instruction!(b"// Restoring coller segemnts"));
-            restore_context_elem(translator, MemoryTokenSegment::That);
-            restore_context_elem(translator, MemoryTokenSegment::This);
-            restore_context_elem(translator, MemoryTokenSegment::Arg);
-            restore_context_elem(translator, MemoryTokenSegment::Local);
+            restore_context_elem(translator, AsmMemoryInstructionSegment::That);
+            restore_context_elem(translator, AsmMemoryInstructionSegment::This);
+            restore_context_elem(translator, AsmMemoryInstructionSegment::Arg);
+            restore_context_elem(translator, AsmMemoryInstructionSegment::Local);
             translator.save_instruction(instruction!(b"// Move PC back"));
             translator.save_link(&RESTORE_PARENT_SP_FROM_R13);
             translator.save_link(&RETURN_FROM_R14);
@@ -135,22 +135,22 @@ fn call<'a, 'b>(
 
     let caller_name = name.clone();
 
-    let mut label_token = BranchToken {
-        kind: BranchTokenKind::Label,
+    let mut label_token = AsmBranchInstruction {
+        kind: AsmBranchInstructionKind::Label,
         name,
     };
 
-    let mut goto_function_token = BranchToken {
-        kind: BranchTokenKind::Goto,
+    let mut goto_function_token = AsmBranchInstruction {
+        kind: AsmBranchInstructionKind::Goto,
         name: function_name,
     };
     translator.save_instruction(instruction!(b"// Call function"));
     translator.save_instruction(instruction!(b"// Saving current segemnts"));
     push_label_elem(translator, caller_name);
-    push_context_elem(translator, MemoryTokenSegment::Local);
-    push_context_elem(translator, MemoryTokenSegment::Arg);
-    push_context_elem(translator, MemoryTokenSegment::This);
-    push_context_elem(translator, MemoryTokenSegment::That);
+    push_context_elem(translator, AsmMemoryInstructionSegment::Local);
+    push_context_elem(translator, AsmMemoryInstructionSegment::Arg);
+    push_context_elem(translator, AsmMemoryInstructionSegment::This);
+    push_context_elem(translator, AsmMemoryInstructionSegment::That);
     translator.save_instruction(instruction!(b"// Saved current segemnts"));
     translator.save_instruction(instruction!(b"// Set ARG pointer"));
     set_arg_for_collee(translator, meta.args_count);
@@ -180,13 +180,19 @@ fn push_label_elem<'a, 'b>(translator: &'a mut Translator<'b>, function_name: Ve
     translator.save_link(&PUSH_INSTRUCTIONS);
 }
 
-fn push_context_elem<'a, 'b>(translator: &'a mut Translator<'b>, segement: MemoryTokenSegment) {
+fn push_context_elem<'a, 'b>(
+    translator: &'a mut Translator<'b>,
+    segement: AsmMemoryInstructionSegment,
+) {
     translator.save_instruction(segment_as_instruction(segement));
     translator.save_instruction(instruction!(b"D=M"));
     translator.save_link(&PUSH_INSTRUCTIONS);
 }
 
-fn restore_context_elem<'a, 'b>(translator: &'a mut Translator<'b>, segement: MemoryTokenSegment) {
+fn restore_context_elem<'a, 'b>(
+    translator: &'a mut Translator<'b>,
+    segement: AsmMemoryInstructionSegment,
+) {
     translator.save_link(&POP_INSTRUCTIONS);
     translator.save_instruction(segment_as_instruction(segement));
     translator.save_instruction(instruction!(b"M=D"));

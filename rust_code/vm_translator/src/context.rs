@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
 #[derive(Debug)]
-pub struct FileContext {
+pub struct WriteFileContext {
     pointer: usize,
     pub pointer_map: HashMap<Vec<u8>, Vec<usize>>,
 }
 
-impl FileContext {
+impl WriteFileContext {
     pub fn new() -> Self {
         Self {
             pointer: 0,

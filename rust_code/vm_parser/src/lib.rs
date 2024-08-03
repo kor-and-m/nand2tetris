@@ -1,11 +1,12 @@
+use file_context::{FileContext, FileSpan};
 use std::io::{Error, ErrorKind};
 use std::path::Path;
 use tokio::fs::File;
 use tokio::io::{self, AsyncReadExt};
 
-pub mod tokens;
+mod instructions;
 
-use tokens::*;
+pub use instructions::*;
 
 const PARSER_BUFFER_SIZE: usize = 4096;
 
@@ -49,7 +50,7 @@ impl VMParser {
     async fn fill_buffer(&mut self) -> io::Result<()> {
         let to_copy = PARSER_BUFFER_SIZE - self.cursor;
 
-        // becouse token size can't be bigger than PARSER_BUFFER_SIZE / 2
+        // becouse instruction size can't be bigger than PARSER_BUFFER_SIZE / 2
         let p = self.buffer.as_mut_ptr();
         unsafe {
             std::ptr::copy_nonoverlapping(p.add(self.cursor), p, to_copy);
@@ -121,7 +122,10 @@ impl VMParser {
         }
     }
 
-    async fn build_memory_token(&mut self, kind: MemoryTokenKind) -> Option<TokenPayload> {
+    async fn build_memory_instruction(
+        &mut self,
+        kind: AsmMemoryInstructionKind,
+    ) -> Option<AsmInstructionPayload> {
         let word = self.next_word().await.unwrap();
         let segment = SEGMENTS[word];
         let val: i16 = self
@@ -131,65 +135,87 @@ impl VMParser {
             .iter()
             .fold(0, |v, x| v * 10 - 48 + *x as i16);
 
-        Some(TokenPayload::Memory(MemoryToken { kind, segment, val }))
+        Some(AsmInstructionPayload::Memory(AsmMemoryInstruction {
+            kind,
+            segment,
+            val,
+        }))
     }
 
-    pub async fn next_token(&mut self) -> Option<Token> {
+    pub async fn next_instruction(&mut self) -> Option<FileContext<AsmInstructionPayload>> {
         self.is_in_progress = true;
         self.instruction_number += 1;
 
         let src_line = self.src_line.clone();
         let word = self.next_word().await?;
 
-        let token_payload = match word {
+        let instruction_payload = match word {
             [b'p', b'u', b's', b'h', ..] => self
-                .build_memory_token(MemoryTokenKind::Push)
+                .build_memory_instruction(AsmMemoryInstructionKind::Push)
                 .await
-                .expect("fail to build push token"),
+                .expect("fail to build push instruction"),
             [b'p', b'o', b'p', ..] => self
-                .build_memory_token(MemoryTokenKind::Pop)
+                .build_memory_instruction(AsmMemoryInstructionKind::Pop)
                 .await
-                .expect("fail to build pop token"),
-            [b'a', b'd', b'd', ..] => self.build_arithmetic_token(ArithmeticToken::Add),
-            [b's', b'u', b'b', ..] => self.build_arithmetic_token(ArithmeticToken::Sub),
-            [b'n', b'e', b'g', ..] => self.build_arithmetic_token(ArithmeticToken::Neg),
-            [b'e', b'q', ..] => self.build_arithmetic_token(ArithmeticToken::Eq),
-            [b'g', b't', ..] => self.build_arithmetic_token(ArithmeticToken::Gt),
-            [b'l', b't', ..] => self.build_arithmetic_token(ArithmeticToken::Lt),
-            [b'a', b'n', b'd', ..] => self.build_arithmetic_token(ArithmeticToken::And),
-            [b'o', b'r', ..] => self.build_arithmetic_token(ArithmeticToken::Or),
-            [b'n', b'o', b't', ..] => self.build_arithmetic_token(ArithmeticToken::Not),
+                .expect("fail to build pop instruction"),
+            [b'a', b'd', b'd', ..] => {
+                self.build_arithmetic_instruction(AsmArithmeticInstruction::Add)
+            }
+            [b's', b'u', b'b', ..] => {
+                self.build_arithmetic_instruction(AsmArithmeticInstruction::Sub)
+            }
+            [b'n', b'e', b'g', ..] => {
+                self.build_arithmetic_instruction(AsmArithmeticInstruction::Neg)
+            }
+            [b'e', b'q', ..] => self.build_arithmetic_instruction(AsmArithmeticInstruction::Eq),
+            [b'g', b't', ..] => self.build_arithmetic_instruction(AsmArithmeticInstruction::Gt),
+            [b'l', b't', ..] => self.build_arithmetic_instruction(AsmArithmeticInstruction::Lt),
+            [b'a', b'n', b'd', ..] => {
+                self.build_arithmetic_instruction(AsmArithmeticInstruction::And)
+            }
+            [b'o', b'r', ..] => self.build_arithmetic_instruction(AsmArithmeticInstruction::Or),
+            [b'n', b'o', b't', ..] => {
+                self.build_arithmetic_instruction(AsmArithmeticInstruction::Not)
+            }
             [b'r', b'e', b't', b'u', b'r', b'n', ..] => {
-                TokenPayload::Function(FunctionToken::Return)
+                AsmInstructionPayload::Function(AsmFunctionInstruction::Return)
             }
             [b'f', b'u', b'n', b'c', b't', b'i', b'o', b'n', ..] => {
-                self.build_function_token(true).await
+                self.build_function_instruction(true).await
             }
-            [b'c', b'a', b'l', b'l', ..] => self.build_function_token(false).await,
+            [b'c', b'a', b'l', b'l', ..] => self.build_function_instruction(false).await,
             [b'l', b'a', b'b', b'e', b'l', ..] => {
-                self.build_branch_token(BranchTokenKind::Label).await
+                self.build_branch_instruction(AsmBranchInstructionKind::Label)
+                    .await
             }
-            [b'g', b'o', b't', b'o', ..] => self.build_branch_token(BranchTokenKind::Goto).await,
+            [b'g', b'o', b't', b'o', ..] => {
+                self.build_branch_instruction(AsmBranchInstructionKind::Goto)
+                    .await
+            }
             [b'i', b'f', b'-', b'g', b'o', b't', b'o', ..] => {
-                self.build_branch_token(BranchTokenKind::IfGoto).await
+                self.build_branch_instruction(AsmBranchInstructionKind::IfGoto)
+                    .await
             }
             _ => {
                 let i = std::str::from_utf8(word).unwrap();
                 panic!("{}: Unexected instruction {}", src_line, i);
             }
         };
-        Some(self.enrich_token_payload(token_payload))
+        Some(self.enrich_instruction_payload(instruction_payload))
     }
 
-    async fn build_branch_token(&mut self, kind: BranchTokenKind) -> TokenPayload {
+    async fn build_branch_instruction(
+        &mut self,
+        kind: AsmBranchInstructionKind,
+    ) -> AsmInstructionPayload {
         let word = self.next_word().await.unwrap();
-        TokenPayload::Branch(BranchToken {
+        AsmInstructionPayload::Branch(AsmBranchInstruction {
             kind,
             name: word.to_vec(),
         })
     }
 
-    async fn build_function_token(&mut self, is_definition: bool) -> TokenPayload {
+    async fn build_function_instruction(&mut self, is_definition: bool) -> AsmInstructionPayload {
         let name = self.next_word().await.unwrap().to_vec();
         let args_count_bytes = self.next_word().await.unwrap();
 
@@ -201,25 +227,31 @@ impl VMParser {
         };
 
         if is_definition {
-            TokenPayload::Function(FunctionToken::Definition(FunctionMetadata {
+            AsmInstructionPayload::Function(AsmFunctionInstruction::Definition(FunctionMetadata {
                 name,
                 args_count,
             }))
         } else {
-            TokenPayload::Function(FunctionToken::Call(FunctionMetadata { name, args_count }))
+            AsmInstructionPayload::Function(AsmFunctionInstruction::Call(FunctionMetadata {
+                name,
+                args_count,
+            }))
         }
     }
 
-    fn build_arithmetic_token(&mut self, kind: ArithmeticToken) -> TokenPayload {
-        TokenPayload::Arithmetic(kind)
+    fn build_arithmetic_instruction(
+        &mut self,
+        kind: AsmArithmeticInstruction,
+    ) -> AsmInstructionPayload {
+        AsmInstructionPayload::Arithmetic(kind)
     }
 
-    fn enrich_token_payload(&self, payload: TokenPayload) -> Token {
-        Token {
-            payload,
-            instruction: self.instruction_number,
-            src: self.src_line,
-        }
+    fn enrich_instruction_payload(
+        &self,
+        payload: AsmInstructionPayload,
+    ) -> FileContext<AsmInstructionPayload> {
+        let span = Some(FileSpan::new(self.src_line, 0));
+        FileContext::new(payload, self.instruction_number, None, span)
     }
 }
 

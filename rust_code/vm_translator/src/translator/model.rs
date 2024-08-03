@@ -4,13 +4,14 @@ use std::{
     mem::{self, MaybeUninit},
 };
 
-use hack_ast::*;
+use hack_instructions::*;
 
+use file_context::FileContext;
 use hack_macro::instruction;
 use symbolic::SymbolicElem;
-use vm_parser::tokens::{FunctionMetadata, FunctionToken, Token, TokenPayload};
+use vm_parser::{AsmFunctionInstruction, AsmInstructionPayload, FunctionMetadata};
 
-use crate::context::FileContext;
+use crate::context::WriteFileContext;
 
 use super::{
     arithmetic::translate_arithmetic_token, branch::translate_branch_token,
@@ -50,7 +51,7 @@ enum InstructionOrLink<'a> {
 
 pub struct Translator<'a> {
     instructions: [InstructionOrLink<'a>; TRANSLATOR_INSTRUCTIONS_CAPACITY],
-    tokens: [Token; TRANSLATOR_TOKEN_CAPACITY],
+    tokens: [FileContext<AsmInstructionPayload>; TRANSLATOR_TOKEN_CAPACITY],
     tokens_cursor_up: usize,
     tokens_cursor_down: usize,
     tokens_cursor_context: usize,
@@ -77,9 +78,13 @@ impl<'a> Translator<'a> {
         };
 
         let tokens = {
-            let x: [MaybeUninit<Token>; TRANSLATOR_TOKEN_CAPACITY] =
+            let x: [MaybeUninit<FileContext<AsmInstructionPayload>>; TRANSLATOR_TOKEN_CAPACITY] =
                 unsafe { MaybeUninit::uninit().assume_init() };
-            unsafe { mem::transmute::<_, [Token; TRANSLATOR_TOKEN_CAPACITY]>(x) }
+            unsafe {
+                mem::transmute::<_, [FileContext<AsmInstructionPayload>; TRANSLATOR_TOKEN_CAPACITY]>(
+                    x,
+                )
+            }
         };
 
         Self {
@@ -138,7 +143,7 @@ impl<'a> Translator<'a> {
         chunk: usize,
         static_pointer: &mut i16,
         static_map: &mut HashMap<Vec<u8>, String>,
-        file_context: &mut FileContext,
+        file_context: &mut WriteFileContext,
     ) -> usize {
         let mut cursor = self.cursor_buff;
         let cursor_up = min(self.cursor_down + chunk, self.cursor);
@@ -211,7 +216,7 @@ impl<'a> Translator<'a> {
             != self.tokens_cursor_up % TRANSLATOR_TOKEN_CAPACITY
         {
             let raw_token = &mut self.tokens[self.tokens_cursor_context % TRANSLATOR_TOKEN_CAPACITY]
-                as *mut Token;
+                as *mut FileContext<AsmInstructionPayload>;
             let token = unsafe { &mut *raw_token };
             self.tokens_cursor_context += 1;
             self.tokens_cursor_down = self.tokens_cursor_context;
@@ -219,14 +224,18 @@ impl<'a> Translator<'a> {
         }
     }
 
-    fn run_for_token(&mut self, token: &mut Token, factory: &mut VariableFactory<'a>) {
+    fn run_for_token(
+        &mut self,
+        token: &mut FileContext<AsmInstructionPayload>,
+        factory: &mut VariableFactory<'a>,
+    ) {
         match &mut token.payload {
-            TokenPayload::Function(function) => {
-                translate_function_token(self, function, factory, token.instruction)
+            AsmInstructionPayload::Function(function) => {
+                translate_function_token(self, function, factory, token.idx)
             }
-            TokenPayload::Branch(branch) => translate_branch_token(self, branch, factory),
-            TokenPayload::Memory(memory) => translate_memory_token(self, memory, factory),
-            TokenPayload::Arithmetic(arithmetic) => {
+            AsmInstructionPayload::Branch(branch) => translate_branch_token(self, branch, factory),
+            AsmInstructionPayload::Memory(memory) => translate_memory_token(self, memory, factory),
+            AsmInstructionPayload::Arithmetic(arithmetic) => {
                 translate_arithmetic_token(self, arithmetic, factory)
             }
         }
@@ -236,7 +245,7 @@ impl<'a> Translator<'a> {
         TRANSLATOR_TOKEN_CAPACITY + self.tokens_cursor_down - self.tokens_cursor_up
     }
 
-    pub fn save_token(&mut self, token: Token) {
+    pub fn save_token(&mut self, token: FileContext<AsmInstructionPayload>) {
         self.tokens[self.tokens_cursor_up % TRANSLATOR_TOKEN_CAPACITY] = token;
         self.tokens_cursor_up += 1;
     }
@@ -254,14 +263,13 @@ impl<'a> Translator<'a> {
     pub fn init_translator(&mut self, factory: &mut VariableFactory<'a>) {
         self.save_link(&INIT_SP);
         let init_function = b"Sys.init".to_vec();
-        self.save_token(Token {
-            src: 0,
-            instruction: 0,
-            payload: TokenPayload::Function(FunctionToken::Call(FunctionMetadata {
+        let payload =
+            AsmInstructionPayload::Function(AsmFunctionInstruction::Call(FunctionMetadata {
                 name: init_function,
                 args_count: 0,
-            })),
-        });
+            }));
+        let context = FileContext::new(payload, 0, None, None);
+        self.save_token(context);
         self.translate(factory);
         self.save_instruction(instruction!(b"// Finish init"));
     }
@@ -301,7 +309,10 @@ mod tests {
     use std::io::prelude::*;
 
     use crate::translator::constants::PUSH_INSTRUCTIONS;
-    use vm_parser::tokens::{ArithmeticToken, MemoryToken, MemoryTokenKind, MemoryTokenSegment};
+    use vm_parser::{
+        AsmArithmeticInstruction, AsmMemoryInstruction, AsmMemoryInstructionKind,
+        AsmMemoryInstructionSegment,
+    };
 
     use super::*;
 
@@ -343,15 +354,11 @@ mod tests {
         let mut file = File::open("./priv/memory/arg_0_pop_answer.asm").unwrap();
         let mut factory = VariableFactory::new(b"AnyFile");
 
-        let token = Token {
-            src: 0,
-            instruction: 0,
-            payload: TokenPayload::Memory(MemoryToken {
-                kind: MemoryTokenKind::Pop,
-                segment: MemoryTokenSegment::Arg,
-                val: 0,
-            }),
-        };
+        let token = new_asm_instruction(AsmInstructionPayload::Memory(AsmMemoryInstruction {
+            kind: AsmMemoryInstructionKind::Pop,
+            segment: AsmMemoryInstructionSegment::Arg,
+            val: 0,
+        }));
 
         let mut buff = [0u8; 1024];
         let mut file_buff = [0u8; 1024];
@@ -372,11 +379,9 @@ mod tests {
         let mut file = File::open("./priv/arithmetic/cmp_answer.asm").unwrap();
         let mut factory = VariableFactory::new(b"AnyFile");
 
-        let token = Token {
-            src: 0,
-            instruction: 0,
-            payload: TokenPayload::Arithmetic(ArithmeticToken::Eq),
-        };
+        let token = new_asm_instruction(AsmInstructionPayload::Arithmetic(
+            AsmArithmeticInstruction::Eq,
+        ));
 
         let mut buff = [0u8; 1024];
         let mut file_buff = [0u8; 1024];
@@ -397,11 +402,9 @@ mod tests {
         let mut file = File::open("./priv/arithmetic/add_answer.asm").unwrap();
         let mut factory = VariableFactory::new(b"AnyFile");
 
-        let token = Token {
-            src: 0,
-            instruction: 0,
-            payload: TokenPayload::Arithmetic(ArithmeticToken::Add),
-        };
+        let token = new_asm_instruction(AsmInstructionPayload::Arithmetic(
+            AsmArithmeticInstruction::Add,
+        ));
 
         let mut buff = [0u8; 1024];
         let mut file_buff = [0u8; 1024];
@@ -422,11 +425,9 @@ mod tests {
         let mut file = File::open("./priv/arithmetic/sub_answer.asm").unwrap();
         let mut factory = VariableFactory::new(b"AnyFile");
 
-        let token = Token {
-            src: 0,
-            instruction: 0,
-            payload: TokenPayload::Arithmetic(ArithmeticToken::Sub),
-        };
+        let token = new_asm_instruction(AsmInstructionPayload::Arithmetic(
+            AsmArithmeticInstruction::Sub,
+        ));
 
         let mut buff = [0u8; 1024];
         let mut file_buff = [0u8; 1024];
@@ -447,11 +448,9 @@ mod tests {
         let mut file = File::open("./priv/arithmetic/not_answer.asm").unwrap();
         let mut factory = VariableFactory::new(b"AnyFile");
 
-        let token = Token {
-            src: 0,
-            instruction: 0,
-            payload: TokenPayload::Arithmetic(ArithmeticToken::Not),
-        };
+        let token = new_asm_instruction(AsmInstructionPayload::Arithmetic(
+            AsmArithmeticInstruction::Not,
+        ));
 
         let mut buff = [0u8; 1024];
         let mut file_buff = [0u8; 1024];
@@ -465,5 +464,9 @@ mod tests {
         let l2 = file.read(&mut file_buff).unwrap();
 
         assert!(buff[..l] == file_buff[..l2]);
+    }
+
+    fn new_asm_instruction(payload: AsmInstructionPayload) -> FileContext<AsmInstructionPayload> {
+        FileContext::new(payload, 0, None, None)
     }
 }

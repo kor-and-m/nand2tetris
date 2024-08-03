@@ -1,0 +1,32 @@
+<expression>
+  <term>
+    <identifier> sum </identifier>
+  </term>
+  <symbol> + </symbol>
+  <term>
+    <identifier> a </identifier>
+    <symbol> [ </symbol>
+    <expression>
+      <term>
+        <identifier> i </identifier>
+      </term>
+    </expression>
+    <symbol> ] </symbol>
+  </term>
+</expression>
+<expression>
+  <term>
+    <identifier> Keyboard </identifier>
+    <symbol> . </symbol>
+    <identifier> readInt </identifier>
+    <symbol> ( </symbol>
+    <expressionList>
+      <expression>
+        <term>
+          <stringConstant> ENTER THE NEXT NUMBER:  </stringConstant>
+        </term>
+      </expression>
+    </expressionList>
+    <symbol> ) </symbol>
+  </term>
+</expression>

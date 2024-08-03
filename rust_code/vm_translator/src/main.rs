@@ -5,8 +5,8 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::{env, mem};
 
-use context::FileContext;
-use hack_ast::{Instruction, VariableFactory};
+use context::WriteFileContext;
+use hack_instructions::{Instruction, VariableFactory};
 use tokio::fs::{read_dir, File, OpenOptions};
 use tokio::io::{self, AsyncSeekExt, AsyncWriteExt};
 use translator::{TranslateOpts, Translator};
@@ -51,7 +51,7 @@ async fn main() -> io::Result<()> {
     let mut pointer = 16;
     let mut static_map = HashMap::new();
 
-    let mut file_context = FileContext::new();
+    let mut file_context = WriteFileContext::new();
 
     if file_path.is_dir() {
         let mut paths = read_dir(file_path).await.unwrap();
@@ -133,7 +133,7 @@ async fn translate_file(
     binary_target: bool,
     static_pointer: &mut i16,
     static_map: &mut HashMap<Vec<u8>, String>,
-    file_pointer: &mut FileContext,
+    file_pointer: &mut WriteFileContext,
 ) -> io::Result<()> {
     let mut parser = vm_parser::VMParser::new(file_path.to_str().unwrap()).await?;
     let src_file_name = file_path.file_stem().expect("Wrong stem");
@@ -149,7 +149,7 @@ async fn translate_file(
         let space = translator.check_free_space();
 
         for _i in 0..space {
-            if let Some(token) = parser.next_token().await {
+            if let Some(token) = parser.next_instruction().await {
                 translator.save_token(token);
             } else {
                 translator.translate(&mut factory);
@@ -191,7 +191,7 @@ async fn write_chunks(
     binary_target: bool,
     static_pointer: &mut i16,
     static_map: &mut HashMap<Vec<u8>, String>,
-    file_pointer: &mut FileContext,
+    file_pointer: &mut WriteFileContext,
 ) -> io::Result<()> {
     let mut sum = 0;
     loop {

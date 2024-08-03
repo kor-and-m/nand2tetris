@@ -1,5 +1,5 @@
 [package]
-name = "hack_ast"
+name = "hack_instructions"
 version = "0.1.0"
 edition = "2021"
 

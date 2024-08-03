@@ -1,4 +1,4 @@
-use hack_ast::*;
+use hack_instructions::*;
 use hack_macro::instruction;
 
 pub const POP_INSTRUCTIONS: [Instruction<'static>; 7] = [

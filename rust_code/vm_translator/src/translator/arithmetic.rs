@@ -1,7 +1,7 @@
-use hack_ast::*;
+use hack_instructions::*;
 use hack_macro::instruction;
 
-use vm_parser::tokens::ArithmeticToken;
+use vm_parser::AsmArithmeticInstruction;
 
 use super::{constants::POP_INSTRUCTIONS, model::Translator};
 
@@ -9,34 +9,34 @@ const POINT_STACK_VALUE: [Instruction<'static>; 2] = [instruction!(b"@SP"), inst
 
 pub fn translate_arithmetic_token<'a, 'b>(
     translator: &'a mut Translator<'b>,
-    token: &'a ArithmeticToken,
+    token: &'a AsmArithmeticInstruction,
     factory: &'a mut VariableFactory<'b>,
 ) {
     match token {
-        ArithmeticToken::Neg => {
+        AsmArithmeticInstruction::Neg => {
             translator.save_link(&POINT_STACK_VALUE);
             translator.save_instruction(instruction!(b"M=-M"));
         }
-        ArithmeticToken::Not => {
+        AsmArithmeticInstruction::Not => {
             translator.save_link(&POINT_STACK_VALUE);
             translator.save_instruction(instruction!(b"M=!M"));
         }
-        ArithmeticToken::Add => {
+        AsmArithmeticInstruction::Add => {
             translator.save_link(&POP_INSTRUCTIONS);
             translator.save_link(&POINT_STACK_VALUE);
             translator.save_instruction(instruction!(b"M=D+M"));
         }
-        ArithmeticToken::Sub => {
+        AsmArithmeticInstruction::Sub => {
             translator.save_link(&POP_INSTRUCTIONS);
             translator.save_link(&POINT_STACK_VALUE);
             translator.save_instruction(instruction!(b"M=M-D"));
         }
-        ArithmeticToken::Or => {
+        AsmArithmeticInstruction::Or => {
             translator.save_link(&POP_INSTRUCTIONS);
             translator.save_link(&POINT_STACK_VALUE);
             translator.save_instruction(instruction!(b"M=D|M"));
         }
-        ArithmeticToken::And => {
+        AsmArithmeticInstruction::And => {
             translator.save_link(&POP_INSTRUCTIONS);
             translator.save_link(&POINT_STACK_VALUE);
             translator.save_instruction(instruction!(b"M=D&M"));
@@ -60,11 +60,11 @@ pub fn translate_arithmetic_token<'a, 'b>(
     }
 }
 
-fn jump_instruction_by_token(token: &ArithmeticToken) -> Instruction<'static> {
+fn jump_instruction_by_token(token: &AsmArithmeticInstruction) -> Instruction<'static> {
     match token {
-        ArithmeticToken::Eq => instruction!(b"D;JEQ"),
-        ArithmeticToken::Gt => instruction!(b"D;JGT"),
-        ArithmeticToken::Lt => instruction!(b"D;JLT"),
+        AsmArithmeticInstruction::Eq => instruction!(b"D;JEQ"),
+        AsmArithmeticInstruction::Gt => instruction!(b"D;JGT"),
+        AsmArithmeticInstruction::Lt => instruction!(b"D;JLT"),
         _ => unreachable!(),
     }
 }
