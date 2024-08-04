@@ -65,43 +65,70 @@ pub struct Statement;
 
 impl JackAstElem<Statement, StatementData> {
     pub fn feed(&mut self, token: JackToken) {
-        if self.is_error | self.is_ready {
+        if self.is_error {
             return;
         }
 
-        if let Some(statement) = self.data.statement.as_mut() {
-            self.is_ready = statement.feed(token);
-            if self.is_ready {
-                let mut statement: Option<StatementKind> = None;
-                mem::swap(&mut statement, &mut self.data.statement);
-                let target_statemenet = unsafe { statement.unwrap().extract_ast_elem() };
-                unsafe { self.push_ast(target_statemenet) }
-            }
-            return;
-        }
-
-        match &token {
-            JackToken::Keyword(JackKeyword::Let) => {
+        match (&token, self.data.statement.as_mut()) {
+            (JackToken::Keyword(JackKeyword::Let), None) => {
                 self.data.statement = Some(StatementKind::Let(JackAstElem::default()))
             }
-            JackToken::Keyword(JackKeyword::Return) => {
+            (JackToken::Keyword(JackKeyword::Return), None) => {
                 self.data.statement = Some(StatementKind::Return(JackAstElem::default()))
             }
-            JackToken::Keyword(JackKeyword::Do) => {
+            (JackToken::Keyword(JackKeyword::Do), None) => {
                 self.data.statement = Some(StatementKind::Do(JackAstElem::default()))
             }
-            JackToken::Keyword(JackKeyword::If) => {
+            (JackToken::Keyword(JackKeyword::If), None) => {
                 self.data.statement = Some(StatementKind::If(JackAstElem::default()))
             }
-            JackToken::Keyword(JackKeyword::While) => {
+            (JackToken::Keyword(JackKeyword::While), None) => {
                 self.data.statement = Some(StatementKind::While(JackAstElem::default()))
+            }
+            (_, Some(StatementKind::If(s))) => {
+                s.feed(token);
+                self.is_ready = s.is_ready;
+                return;
+            }
+            (_, Some(statement)) => {
+                self.is_ready = statement.feed(token);
+                self.statement_to_ast();
+                return;
             }
             _ => {
                 self.is_error = true;
             }
         }
 
+        if self.is_error {
+            return;
+        }
+
         self.data.statement.as_mut().unwrap().feed(token);
+    }
+
+    pub fn feed_token(&self, token: &JackToken) -> bool {
+        if !self.is_ready {
+            return true;
+        }
+
+        match (&self.data.statement, token) {
+            (Some(StatementKind::If(_)), JackToken::Keyword(JackKeyword::Else)) => true,
+            _ => false,
+        }
+    }
+
+    pub fn terminate(&mut self) {
+        self.statement_to_ast()
+    }
+
+    fn statement_to_ast(&mut self) {
+        if self.is_ready && self.data.statement.is_some() {
+            let mut statement_new: Option<StatementKind> = None;
+            mem::swap(&mut statement_new, &mut self.data.statement);
+            let target_statemenet = unsafe { statement_new.unwrap().extract_ast_elem() };
+            unsafe { self.push_ast(target_statemenet) }
+        }
     }
 }
 

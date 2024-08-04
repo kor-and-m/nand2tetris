@@ -29,9 +29,8 @@ impl JackAstElem<Statements, StatementsData> {
             return;
         }
 
-        let is_statement_ready = self.data.statement.as_ref().unwrap().is_ready;
-
-        if is_statement_ready {
+        if !self.data.statement.as_ref().unwrap().feed_token(&token) {
+            self.data.statement.as_mut().unwrap().terminate();
             let mut statement: Option<JackAstElem<Statement, StatementData>> =
                 Some(JackAstElem::default());
             statement.as_mut().unwrap().feed(token);
@@ -51,7 +50,8 @@ impl JackAstElem<Statements, StatementsData> {
 
         let mut e: Option<JackAstElem<Statement, StatementData>> = None;
         mem::swap(&mut e, &mut self.data.statement);
-        let statement = e.unwrap();
+        let mut statement = e.unwrap();
+        statement.terminate();
 
         if statement.is_error || !statement.is_ready {
             return;

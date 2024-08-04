@@ -44,7 +44,12 @@ pub async fn write_to_xml<S: Stream<Item = FileContext<JackToken>> + Unpin>(
 
 mod tests {
     #![allow(unused_imports)]
-    use tokio::{fs::File, io::AsyncReadExt};
+    use std::{ffi::OsStr, path::PathBuf};
+
+    use tokio::{
+        fs::File,
+        io::{AsyncBufReadExt, AsyncReadExt, BufReader},
+    };
 
     use crate::{
         tokens::{JackIdent, JackTokenizer},
@@ -54,7 +59,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_var_statement() {
+    async fn test_array_file() {
         let file = File::open("./priv/ArrayTest.jack").await.unwrap();
 
         let mut tokenizer = JackTokenizer::from_file(file, true);
@@ -74,5 +79,58 @@ mod tests {
 
         assert_eq!(generated_size, cmp_size);
         assert_eq!(generated_buff, cmp_buff);
+    }
+
+    #[tokio::test]
+    async fn test_expression_less_square_project() {
+        let src_dir = "./priv/ExpressionLessSquare/";
+        let cmp_dir = "./priv/ExpressionLessSquare/";
+        let out_dir = "./priv/test/gen/ExpressionLessSquare/";
+
+        let mut files_in_dir = tokio::fs::read_dir(src_dir).await.unwrap();
+        let mut files = Vec::new();
+
+        while let Some(child) = files_in_dir.next_entry().await.unwrap() {
+            let metadata = child.metadata().await.unwrap();
+            if metadata.is_file() {
+                let p = child.path();
+                if let Some("jack") = p.extension().and_then(OsStr::to_str) {
+                    files.push(p)
+                };
+            }
+        }
+
+        for f in files {
+            let n = f.file_stem().and_then(OsStr::to_str).unwrap().to_string();
+            let out_file_path = format!("{out_dir}{n}.xml");
+            let cmp_file_path = format!("{cmp_dir}{n}.xml");
+            let file = File::open(f).await.unwrap();
+            let mut tokenizer = JackTokenizer::from_file(file, true);
+            write_to_xml(&mut tokenizer, &out_file_path).await;
+
+            let generated_file = File::open(&out_file_path).await.unwrap();
+            let cmp_file = File::open(&cmp_file_path).await.unwrap();
+
+            let cmp_file_reader = BufReader::new(cmp_file);
+            let generated_file_reader = BufReader::new(generated_file);
+            let mut cmp_file_reader_lines = cmp_file_reader.lines();
+            let mut generated_file_reader_lines = generated_file_reader.lines();
+
+            let mut idx = 0;
+
+            while let Some(line) = cmp_file_reader_lines
+                .next_line()
+                .await
+                .expect("Failed to read file")
+            {
+                let generated = generated_file_reader_lines
+                    .next_line()
+                    .await
+                    .expect("Failed to read file")
+                    .expect("Fail read line");
+                assert_eq!(line, generated, "Line: {} File {}.jack", idx, n);
+                idx += 1;
+            }
+        }
     }
 }

@@ -1,1 +1,1 @@
-/priv/test/gen/*.xml
+/priv/test/gen/**/*.xml

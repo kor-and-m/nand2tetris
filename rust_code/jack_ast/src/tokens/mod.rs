@@ -77,9 +77,10 @@ impl JackTokenizer {
 
         let n = self.reader.read(&mut self.buffer[to_copy..]).await?;
         self.cursor_abs += self.cursor;
-        self.cursor = to_copy;
+        self.cursor = 0;
         self.len = n + to_copy;
         self.eof = n == 0;
+
         Ok(())
     }
 

@@ -19,6 +19,7 @@ enum WhileStatementStage {
 
 #[derive(Default)]
 pub struct WhileStatementData {
+    brackets: usize,
     stage: WhileStatementStage,
     expression_in_breackets: Option<JackAstElem<ExpressionInBreackets, ExpressionInBreacketsData>>,
     statements: Option<JackAstElem<Statements, StatementsData>>,
@@ -42,6 +43,9 @@ impl JackAstElem<WhileStatement, WhileStatementData> {
                 unsafe { self.push_ast(expression.unwrap()) };
                 self.push_token(token);
                 self.data.stage = WhileStatementStage::AwaitBody;
+                let statements = JackAstElem::default();
+                self.data.statements = Some(statements);
+                self.data.brackets = 1;
             }
             (WhileStatementStage::AwaitCondition, _) => {
                 if self.data.expression_in_breackets.is_none() {
@@ -54,19 +58,21 @@ impl JackAstElem<WhileStatement, WhileStatementData> {
                     .unwrap()
                     .feed(token);
             }
-            (WhileStatementStage::AwaitBody, JackToken::Symbol(JackSymbol::CloseCurlyBracket)) => {
-                let mut statements = None;
-                self.data.statements.as_mut().unwrap().terminate();
-                mem::swap(&mut statements, &mut self.data.statements);
+            (WhileStatementStage::AwaitBody, JackToken::Symbol(JackSymbol::CloseCurlyBracket))
+                if self.data.brackets == 1 =>
+            {
+                let mut statements = JackAstElem::from_option(&mut self.data.statements);
+                statements.as_mut().unwrap().terminate();
                 self.is_ready = statements.as_ref().unwrap().is_ready;
                 unsafe { self.push_ast(statements.unwrap()) };
                 self.push_token(token);
             }
-            (WhileStatementStage::AwaitBody, _) => {
-                if self.data.statements.is_none() {
-                    let statements = JackAstElem::default();
-                    self.data.statements = Some(statements);
-                }
+            (WhileStatementStage::AwaitBody, t) => {
+                match t {
+                    JackToken::Symbol(JackSymbol::OpenCurlyBracket) => self.data.brackets += 1,
+                    JackToken::Symbol(JackSymbol::CloseCurlyBracket) => self.data.brackets -= 1,
+                    _ => (),
+                };
                 self.data.statements.as_mut().unwrap().feed(token);
             }
             _ => {

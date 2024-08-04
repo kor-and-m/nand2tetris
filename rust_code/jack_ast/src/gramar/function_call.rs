@@ -9,7 +9,16 @@ use super::{
 };
 
 #[derive(Default)]
+enum FunctionCallStage {
+    #[default]
+    AwaitIdent,
+    AwaitOpenBreacket,
+    AwaitCloseBreacket,
+}
+
+#[derive(Default)]
 pub struct FunctionCallData {
+    satge: FunctionCallStage,
     breackets: usize,
     expressions: Option<JackAstElem<ExpressionList, ExpressionListData>>,
 }
@@ -22,20 +31,36 @@ impl JackAstElem<FunctionCall, FunctionCallData> {
             return;
         }
 
-        match (self.children_count(), &token) {
-            (x, JackToken::Ident(_)) if x == 0 || x == 2 => self.push_token(token),
-            (1, JackToken::Symbol(JackSymbol::Period)) => self.push_token(token),
-            (3, JackToken::Symbol(JackSymbol::OpenRoundBracket)) => {
+        match (&self.data.satge, &token) {
+            (FunctionCallStage::AwaitIdent, JackToken::Ident(_)) => {
+                self.push_token(token);
+                self.data.satge = FunctionCallStage::AwaitOpenBreacket;
+            }
+            (FunctionCallStage::AwaitOpenBreacket, JackToken::Symbol(JackSymbol::Period)) => {
+                self.push_token(token);
+                self.data.satge = FunctionCallStage::AwaitIdent;
+            }
+            (
+                FunctionCallStage::AwaitOpenBreacket,
+                JackToken::Symbol(JackSymbol::OpenRoundBracket),
+            ) => {
                 self.push_token(token);
                 self.data.breackets = 1;
                 self.data.expressions = Some(JackAstElem::default());
                 self.data.expressions.as_mut().unwrap().is_ready = true;
+                self.data.satge = FunctionCallStage::AwaitCloseBreacket;
             }
-            (x, JackToken::Symbol(JackSymbol::OpenRoundBracket)) if x > 3 => {
+            (
+                FunctionCallStage::AwaitCloseBreacket,
+                JackToken::Symbol(JackSymbol::OpenRoundBracket),
+            ) => {
                 self.data.breackets += 1;
                 self.data.expressions.as_mut().unwrap().feed(token);
             }
-            (x, JackToken::Symbol(JackSymbol::CloseRoundBracket)) if x > 3 => {
+            (
+                FunctionCallStage::AwaitCloseBreacket,
+                JackToken::Symbol(JackSymbol::CloseRoundBracket),
+            ) => {
                 if self.data.breackets > 1 {
                     self.data.breackets -= 1;
                     self.data.expressions.as_mut().unwrap().feed(token);
@@ -49,7 +74,7 @@ impl JackAstElem<FunctionCall, FunctionCallData> {
                     self.push_token(token);
                 }
             }
-            (x, _) if x > 3 => {
+            (FunctionCallStage::AwaitCloseBreacket, _) => {
                 self.data.expressions.as_mut().unwrap().feed(token);
             }
             _ => {
