@@ -225,6 +225,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "jack_compiler"
+version = "0.1.0"
+dependencies = [
+ "jack_ast",
+ "tokio",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.155"
 source = "registry+https://github.com/rust-lang/crates.io-index"

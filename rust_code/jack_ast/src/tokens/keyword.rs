@@ -38,6 +38,15 @@ impl JackKeyword {
         }
     }
 
+    pub fn is_type(&self) -> bool {
+        match self {
+            JackKeyword::Char => true,
+            JackKeyword::Boolean => true,
+            JackKeyword::Int => true,
+            _ => false,
+        }
+    }
+
     pub fn bytes_to_keyword(buff: &[u8]) -> Option<Self> {
         match buff {
             [b'c', b'l', b'a', b's', b's', ..] => Some(Self::Class),

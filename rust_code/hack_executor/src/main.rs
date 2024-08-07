@@ -24,7 +24,7 @@ fn main() -> io::Result<()> {
 
     HackExecutor::run(h, 5_000);
 
-    let r = if args.len() > 2 {
+    if args.len() > 2 {
         let v: i16 = args[2].parse().unwrap();
         HackExecutor::read_memory(h, v)
     } else {
@@ -33,6 +33,5 @@ fn main() -> io::Result<()> {
 
     HackExecutor::drop(h);
 
-    println!("{}", r);
     Ok(())
 }

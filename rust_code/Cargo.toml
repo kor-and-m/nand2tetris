@@ -7,5 +7,5 @@ members = [
     "jack_ast",
     "symbolic",
     "vm_parser",
-    "vm_translator", "file_context",
+    "vm_translator", "file_context", "jack_compiler",
 ]

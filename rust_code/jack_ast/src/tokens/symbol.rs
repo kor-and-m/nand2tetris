@@ -2,7 +2,7 @@ use tokio::io::{AsyncWrite, AsyncWriteExt, Result};
 
 use crate::xml::IntoXML;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum JackSymbol {
     OpenCurlyBracket,
     CloseCurlyBracket,
@@ -44,6 +44,7 @@ impl JackSymbol {
     pub fn is_unary_op(&self) -> bool {
         match self {
             JackSymbol::Not => true,
+            JackSymbol::Minus => true,
             _ => false,
         }
     }
@@ -92,12 +93,12 @@ impl IntoXML for JackSymbol {
             Self::Minus => write.write(b"-").await?,
             Self::Multiply => write.write(b"*").await?,
             Self::Divide => write.write(b"/").await?,
-            Self::And => write.write(b"&").await?,
+            Self::And => write.write(b"&amp;").await?,
             Self::Or => write.write(b"|").await?,
             Self::Less => write.write(b"&lt;").await?,
             Self::Greater => write.write(b"&gt;").await?,
             Self::Eq => write.write(b"=").await?,
-            Self::Not => write.write(b"!").await?,
+            Self::Not => write.write(b"~").await?,
         };
 
         n += write.write(b" </symbol>").await?;

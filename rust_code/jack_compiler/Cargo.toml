@@ -1,0 +1,8 @@
+[package]
+name = "jack_compiler"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+jack_ast = { path = "../jack_ast" }
+tokio = { version = "1", features = ["full"] }

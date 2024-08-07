@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub struct FileDataLocation {
     pub from: usize,
     pub size: usize,
@@ -9,6 +10,7 @@ impl FileDataLocation {
     }
 }
 
+#[derive(Debug)]
 pub struct FileSpan {
     pub line: usize,
     pub symbol: usize,
@@ -20,6 +22,7 @@ impl FileSpan {
     }
 }
 
+#[derive(Debug)]
 pub struct FileContext<Payload> {
     pub idx: usize,
     pub location: Option<FileDataLocation>,
