@@ -1,5 +1,4 @@
 use std::{
-    cmp::min,
     collections::HashMap,
     mem::{self, MaybeUninit},
 };
@@ -18,7 +17,7 @@ use super::{
     function::translate_function_token, memory::translate_memory_token,
 };
 
-const TRANSLATOR_INSTRUCTIONS_CAPACITY: usize = 1024;
+const TRANSLATOR_INSTRUCTIONS_CAPACITY: usize = 2048;
 const TRANSLATOR_TOKEN_CAPACITY: usize = 128;
 const INIT_SP: [Instruction<'static>; 4] = [
     instruction!(b"@256"),
@@ -54,9 +53,8 @@ pub struct Translator<'a> {
     tokens: [FileContext<AsmInstructionPayload>; TRANSLATOR_TOKEN_CAPACITY],
     tokens_cursor_up: usize,
     tokens_cursor_down: usize,
-    tokens_cursor_context: usize,
     cursor: usize,
-    cursor_buff: usize,
+    cursor_link: usize,
     cursor_down: usize,
     translate_opts: TranslateOpts,
     instruction_counter: usize,
@@ -93,8 +91,7 @@ impl<'a> Translator<'a> {
             cursor: 0,
             tokens_cursor_up: 0,
             tokens_cursor_down: 0,
-            tokens_cursor_context: 0,
-            cursor_buff: 0,
+            cursor_link: 0,
             cursor_down: 0,
             instruction_counter: 0,
             translate_opts: opts,
@@ -103,37 +100,49 @@ impl<'a> Translator<'a> {
 
     pub fn reset(&mut self) {
         self.cursor = 0;
+        self.cursor_down = 0;
     }
 
-    pub fn reset_buffer(&mut self) {
-        self.cursor_buff = 0;
+    fn next_instruction(&mut self) -> Option<&Instruction<'_>> {
+        while self.cursor_down < self.cursor {
+            let res = match &self.instructions[self.cursor_down] {
+                InstructionOrLink::I(i) => {
+                    self.cursor_down += 1;
+                    i
+                }
+                InstructionOrLink::L(l) => {
+                    let r = &l[self.cursor_link];
+                    self.cursor_link += 1;
+                    
+                    if self.cursor_link == l.len() {
+                        self.cursor_down += 1;
+                        self.cursor_link = 0;
+                    }
+    
+                    r
+                }
+            };
+
+            if self.instruction_is_needed(res) {
+                return Some(res);
+            }
+        }
+
+        None
     }
 
     pub fn instructions_to_symbols(&mut self, buff: &mut [u8], chunk: usize) -> usize {
-        let mut cursor = self.cursor_buff;
-        let cursor_up = min(self.cursor_down + chunk, self.cursor);
-        for il in self.instructions[self.cursor_down..cursor_up].iter() {
-            self.cursor_down += 1;
-            cursor += match il {
-                InstructionOrLink::I(i) => i.write_symbols(&mut buff[cursor..]),
-                InstructionOrLink::L(l) => {
-                    let mut cursor2 = 0;
-                    for i2 in l.iter() {
-                        if !self.instruction_is_needed(i2) {
-                            continue;
-                        }
-                        cursor2 += i2.write_symbols(&mut buff[(cursor + cursor2)..]);
-                        buff[cursor + cursor2] = b'\n';
-                        cursor2 += 1;
-                    }
-                    cursor2 - 1
-                }
+        let mut res = 0;
+        for _idx in 0..chunk {
+            res += if let Some(i) = self.next_instruction() {
+                i.write_symbols(&mut buff[res..])
+            } else {
+                break;
             };
-            buff[cursor] = b'\n';
-            cursor += 1;
+
+            buff[res] = b'\n';
+            res += 1;
         }
-        let res = cursor - self.cursor_buff;
-        self.cursor_buff = cursor;
         res
     }
 
@@ -145,81 +154,43 @@ impl<'a> Translator<'a> {
         static_map: &mut HashMap<Vec<u8>, String>,
         file_context: &mut WriteFileContext,
     ) -> usize {
-        let mut cursor = self.cursor_buff;
-        let cursor_up = min(self.cursor_down + chunk, self.cursor);
-        for il in self.instructions[self.cursor_down..cursor_up].iter() {
-            self.cursor_down += 1;
-            let l1 = match il {
-                InstructionOrLink::I(i) => {
-                    if !self.instruction_is_needed(i) {
-                        continue;
-                    }
-                    let (l, maybe_val_to_save) = i.write_bytes(
-                        &mut buff[cursor..],
-                        static_pointer,
-                        file_context.global_instruction_number(self.instruction_counter),
-                        static_map,
-                    );
-                    if let Some(val_to_save) = maybe_val_to_save {
-                        file_context.set_intruction(val_to_save, self.instruction_counter)
-                    }
+        let mut res = 0;
+        let n = file_context.global_instruction_number(self.instruction_counter);
 
-                    if l != 0 {
-                        self.instruction_counter += 1;
-                    }
-                    l
+        for _idx in 0..chunk {
+            res += if let Some(i) = self.next_instruction() {
+                let (mut l, maybe_val_to_save) = i.write_bytes(
+                    &mut buff[res..],
+                    static_pointer,
+                    n,
+                    static_map
+                );
+
+                if let Some(val_to_save) = maybe_val_to_save {
+                    file_context.set_intruction(val_to_save, self.instruction_counter)
                 }
-                InstructionOrLink::L(l) => {
-                    let mut cursor2 = 0;
-                    for i2 in l.iter() {
-                        if !self.instruction_is_needed(i2) {
-                            continue;
-                        }
-                        let (l2, maybe_val_to_save) = i2.write_bytes(
-                            &mut buff[(cursor + cursor2)..],
-                            static_pointer,
-                            file_context.global_instruction_number(self.instruction_counter),
-                            static_map,
-                        );
 
-                        if let Some(val_to_save) = maybe_val_to_save {
-                            file_context.set_intruction(val_to_save, self.instruction_counter)
-                        }
-
-                        if l2 != 0 {
-                            self.instruction_counter += 1;
-                            cursor2 += l2;
-                            buff[cursor + cursor2] = b'\n';
-                            cursor2 += 1;
-                        }
-                    }
-                    if cursor2 != 0 {
-                        cursor2 - 1
-                    } else {
-                        0
-                    }
+                if l != 0 {
+                    self.instruction_counter += 1;
+                    buff[res + l] = b'\n';
+                    l += 1;
                 }
+
+                l
+            } else {
+                break;
             };
-            if l1 != 0 {
-                cursor += l1;
-                buff[cursor] = b'\n';
-                cursor += 1;
-            }
         }
-        let res = cursor - self.cursor_buff;
-        self.cursor_buff = cursor;
+
         res
     }
 
     pub fn translate<'b, 'c>(&'b mut self, factory: &'c mut VariableFactory<'a>) {
-        while self.tokens_cursor_context % TRANSLATOR_TOKEN_CAPACITY
-            != self.tokens_cursor_up % TRANSLATOR_TOKEN_CAPACITY
-        {
-            let raw_token = &mut self.tokens[self.tokens_cursor_context % TRANSLATOR_TOKEN_CAPACITY]
+        while self.tokens_cursor_down != self.tokens_cursor_up {
+            let raw_token = &mut self.tokens[self.tokens_cursor_down % TRANSLATOR_TOKEN_CAPACITY]
                 as *mut FileContext<AsmInstructionPayload>;
             let token = unsafe { &mut *raw_token };
-            self.tokens_cursor_context += 1;
-            self.tokens_cursor_down = self.tokens_cursor_context;
+            self.tokens_cursor_down += 1;
             self.run_for_token(token, factory)
         }
     }
@@ -280,7 +251,7 @@ impl<'a> Translator<'a> {
         }
 
         if self.cursor == TRANSLATOR_INSTRUCTIONS_CAPACITY {
-            false
+            unreachable!();
         } else {
             self.instructions[self.cursor] = InstructionOrLink::I(i);
             self.cursor += 1;

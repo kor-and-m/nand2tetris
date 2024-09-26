@@ -173,11 +173,11 @@ impl<'a> JackSubroutineCompilerContext<'a> {
             return Some(var);
         }
 
-        if self.subroutine.key == JackSubroutineType::Function {
-            return None;
-        }
-
         if let Some(var) = self.class.vars.get(name) {
+            if self.subroutine.key == JackSubroutineType::Function && var.segment == JackSegment::Field {
+                return None;
+            }
+
             if var.segment != JackSegment::Static
                 && self.subroutine.key == JackSubroutineType::Constructor
                 && !self.is_assigned(name)
@@ -372,6 +372,8 @@ impl<'a> JackSubroutineCompilerContext<'a> {
         res[2].extend(b"END_");
 
         for i in res.iter_mut() {
+            i.extend(&self.class.class().0);
+            i.push(b'_');
             i.extend(&self.subroutine.name.0);
             i.push(b'_');
             i.extend(self.if_counter.to_string().as_bytes())
@@ -389,6 +391,8 @@ impl<'a> JackSubroutineCompilerContext<'a> {
         res[1].extend(b"END_");
 
         for i in res.iter_mut() {
+            i.extend(&self.class.class().0);
+            i.push(b'_');
             i.extend(&self.subroutine.name.0);
             i.push(b'_');
             i.extend(self.while_counter.to_string().as_bytes())

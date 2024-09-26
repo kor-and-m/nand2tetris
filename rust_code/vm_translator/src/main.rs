@@ -14,6 +14,8 @@ use translator::{TranslateOpts, Translator};
 mod context;
 mod translator;
 
+const PATH_TO_BIFS: &'static str = "../static/bifs";
+
 #[tokio::main]
 async fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
@@ -54,7 +56,6 @@ async fn main() -> io::Result<()> {
     let mut file_context = WriteFileContext::new();
 
     if file_path.is_dir() {
-        let mut paths = read_dir(file_path).await.unwrap();
         let mut translator = Translator::new_with_opts(opts);
         let mut factory = VariableFactory::new(b"initial_call");
         translator.init_translator(&mut factory);
@@ -70,6 +71,28 @@ async fn main() -> io::Result<()> {
             translator.instructions_to_symbols(&mut buff, 100)
         };
         file_context.set_new_pointer(f_write.write(&mut buff[..l]).await.unwrap());
+
+        let mut paths = read_dir(PATH_TO_BIFS).await.unwrap();
+
+        while let Some(path) = paths.next_entry().await? {
+            let path_type = path.path();
+            let vm_extension = Some(OsStr::new("vm"));
+            if vm_extension == path_type.extension() {
+                translate_file(
+                    path_type.as_path(),
+                    &mut f_write,
+                    &mut buff,
+                    opts,
+                    binary_target,
+                    &mut pointer,
+                    &mut static_map,
+                    &mut file_context,
+                )
+                .await?
+            }
+        }
+
+        paths = read_dir(file_path).await.unwrap();
 
         while let Some(path) = paths.next_entry().await? {
             let path_type = path.path();
@@ -168,6 +191,7 @@ async fn translate_file(
         }
 
         translator.translate(&mut factory);
+
         write_chunks(
             &mut translator,
             f_write,
@@ -198,13 +222,14 @@ async fn write_chunks(
         let l = if binary_target {
             translator.instructions_to_bytes(buff, 100, static_pointer, static_map, file_pointer)
         } else {
-            translator.instructions_to_symbols(buff, 100)
+            translator.instructions_to_symbols(buff, 300)
         };
+
         if l == 0 {
             break;
         }
+
         sum += f_write.write(&mut buff[..l]).await.unwrap();
-        translator.reset_buffer();
     }
     file_pointer.set_new_pointer(sum);
     Ok(())

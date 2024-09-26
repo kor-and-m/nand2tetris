@@ -18,7 +18,7 @@ impl WriteFileContext {
         self.pointer += pointer;
     }
 
-    pub fn global_instruction_number(&mut self, instruction_idx: usize) -> usize {
+    pub fn global_instruction_number(&self, instruction_idx: usize) -> usize {
         self.pointer / 17 + instruction_idx
     }
 

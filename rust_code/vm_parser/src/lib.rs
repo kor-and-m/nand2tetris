@@ -60,7 +60,7 @@ impl VMParser {
         self.is_eof = self.cursor > n;
         self.end_word_cursor -= self.cursor;
         self.cursor = 0;
-        self.end_page_cursor = n;
+        self.end_page_cursor = n + to_copy;
         Ok(())
     }
 
