@@ -5,7 +5,7 @@ use std::task::{Context, Poll};
 use file_context::{FileContext, FileDataLocation, FileSpan};
 use futures::FutureExt;
 use tokio::fs::File;
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, Result};
+use tokio::io::{AsyncRead, AsyncReadExt, Result};
 use tokio_stream::Stream;
 
 mod comment;
@@ -21,8 +21,6 @@ pub use intlit::*;
 pub use keyword::*;
 pub use stringlit::*;
 pub use symbol::*;
-
-use crate::xml::IntoXML;
 
 type PinnedInputReader = Pin<Box<dyn AsyncRead>>;
 
@@ -58,6 +56,10 @@ impl JackTokenizer {
 
     pub fn from_file(file: File, skip_comments: bool) -> Self {
         Self::new(Box::pin(file), skip_comments)
+    }
+
+    pub fn from_slice(slice: &'static [u8], skip_comments: bool) -> Self {
+        Self::new(Box::pin(slice), skip_comments)
     }
 
     async fn fill_buff(&mut self) -> Result<()> {
@@ -133,6 +135,24 @@ impl JackTokenizer {
                 }
             } else {
                 self.fill_buff().await.expect("Fill buffer error");
+                if self.eof {
+                    self.cursor += token_size;
+                    if !self.skip_comments {
+                        self.token_idx += 1;
+                        return token;
+                    }
+
+                    if let Some(FileContext {
+                        payload: JackToken::Comment(_),
+                        ..
+                    }) = token
+                    {
+                        continue;
+                    } else {
+                        self.token_idx += 1;
+                        return token;
+                    }
+                };
             }
         }
     }
@@ -161,18 +181,9 @@ pub enum JackToken {
     Ident(JackIdent),
 }
 
-impl IntoXML for JackToken {
-    async fn write_xml<T: AsyncWrite + Unpin + Send>(&self, write: &mut T) -> Result<usize> {
-        let res = match self {
-            JackToken::Comment(_) => 0,
-            JackToken::Ident(s) => s.write_xml(write).await?,
-            JackToken::Symbol(s) => s.write_xml(write).await?,
-            JackToken::Keyword(s) => s.write_xml(write).await?,
-            JackToken::IntLiteral(s) => s.write_xml(write).await?,
-            JackToken::StringLiteral(s) => s.write_xml(write).await?,
-        };
-
-        Ok(res)
+impl Default for JackToken {
+    fn default() -> Self {
+        JackToken::Keyword(JackKeyword::default())
     }
 }
 

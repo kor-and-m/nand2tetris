@@ -1,35 +1,88 @@
-use std::{env, ffi::OsStr};
+use std::{env, ffi::OsStr, path::Path};
 
-use jack_ast::{gramar::write_to_xml, tokens::JackTokenizer};
-use tokio::{fs::File, io::Result};
+use jack_ast::gramar::*;
+use jack_ast::tokens::JackTokenizer;
+use subroutine::JackSubroutineCompilerContext;
+use tokio::{
+    fs::{read_dir, File},
+    io::{AsyncWriteExt, Result},
+    task::JoinSet,
+};
 
-#[tokio::main]
+use class::JackClassCompilerContext;
+use vm_parser::AsmInstructionPayload;
+
+mod class;
+mod subroutine;
+mod vars;
+
+#[tokio::main(flavor = "multi_thread", worker_threads = 6)]
 async fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
 
-    let src_dir = &args[1];
-    let out_dir = &args[1];
+    let src_file_or_dir = Path::new(&args[1]);
 
-    let mut files_in_dir = tokio::fs::read_dir(src_dir).await.unwrap();
-    let mut files = Vec::new();
+    if src_file_or_dir.is_dir() {
+        let mut paths = read_dir(src_file_or_dir).await.unwrap();
+        while let Some(path) = paths.next_entry().await? {
+            let path_type = path.path();
+            let jack_extension = Some(OsStr::new("jack"));
+            if jack_extension == path_type.extension() {
+                let dest = path_type.with_extension("vm");
+                compile_file(&path_type.as_path(), dest.as_path()).await?;
+            }
+        }
+        Ok(())
+    } else {
+        let dest = src_file_or_dir.with_extension("vm");
+        compile_file(src_file_or_dir, dest.as_path()).await?;
+        Ok(())
+    }
+}
 
-    while let Some(child) = files_in_dir.next_entry().await.unwrap() {
-        let metadata = child.metadata().await.unwrap();
-        if metadata.is_file() {
-            let p = child.path();
-            if let Some("jack") = p.extension().and_then(OsStr::to_str) {
-                files.push(p)
-            };
+async fn compile_file(src: &Path, dest: &Path) -> Result<()> {
+    let file = File::open(src).await?;
+    let mut file_write = File::create(dest).await?;
+    let mut tokenizer = JackTokenizer::from_file(file, true);
+    let ast_builder = JackASTBuilderEngine::new(&mut tokenizer);
+    let mut ast = ast_builder.build_class().await;
+    let class_context = JackClassCompilerContext::init(&mut ast);
+    execute_tasks(class_context, ast, &mut file_write).await?;
+
+    Ok(())
+}
+
+async fn execute_tasks(
+    class_context: JackClassCompilerContext,
+    mut ast: JackClass,
+    file_write: &mut File,
+) -> Result<()> {
+    let mut tasks = JoinSet::new();
+    let link = unsafe { &*(&class_context as *const JackClassCompilerContext) };
+    for subroutine in ast.subroutines.iter_mut() {
+        new_task(&mut tasks, link, unsafe {
+            &mut *(subroutine as *mut JackSubroutine)
+        })
+    }
+
+    while let Some(result) = tasks.join_next().await {
+        for i in result.unwrap() {
+            let s = format!("{}\n", i);
+            file_write.write(s.as_bytes()).await?;
         }
     }
 
-    for f in files {
-        let n = f.file_stem().and_then(OsStr::to_str).unwrap().to_string();
-        let out_file_path = format!("{out_dir}/{n}.xml");
-        let file = File::open(f).await.unwrap();
-        let mut tokenizer = JackTokenizer::from_file(file, true);
-        write_to_xml(&mut tokenizer, &out_file_path).await;
-    }
-
     Ok(())
+}
+
+fn new_task(
+    set: &mut JoinSet<Vec<AsmInstructionPayload>>,
+    class_context: &'static JackClassCompilerContext,
+    subroutine: &'static mut JackSubroutine,
+) {
+    set.spawn(async move {
+        let r = JackSubroutineCompilerContext::init(&class_context, subroutine, true);
+
+        r.collect::<Vec<_>>()
+    });
 }

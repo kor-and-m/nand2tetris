@@ -1,0 +1,67 @@
+function Main.new 0
+push constant 2
+call Memory.alloc 1
+pop pointer 0
+push constant 3
+pop this 0
+call Array.new 0
+pop this 1
+label WHILE_EXP_new_0
+push this 0
+push constant 2
+gt
+neg
+if-goto WHILE_END_new_0
+push constant 1
+pop this 0
+goto WHILE_EXP_new_0
+label WHILE_END_new_0
+push constant 0
+pop this 0
+push pointer 0
+return
+function Main.build 0
+push argument 0
+pop pointer 0
+push constant 0
+return
+function Main.gg 1
+push argument 0
+pop pointer 0
+push constant 5
+pop local 0
+push argument 1
+push constant 10
+add
+push constant 12
+call Array.new 1
+push argument 2
+push this 1
+push constant 3
+push constant 8
+add
+add
+pop pointer 1
+push that 0
+call Game.new 2
+push constant 66
+neg
+add
+push constant 72
+push this 0
+sub
+push local 0
+sub
+call Math.multiply 2
+add
+call A.save 1
+pop temp 0
+pop pointer 1
+push temp 0
+pop that 0
+push pointer 0
+push constant 6
+call Main.build 2
+pop temp 0
+push constant 0
+return

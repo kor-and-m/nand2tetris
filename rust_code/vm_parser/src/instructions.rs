@@ -1,5 +1,5 @@
 use phf::phf_map;
-use std::fmt;
+use std::{fmt, str::from_utf8};
 
 use hack_macro::SymbolicElem;
 use symbolic::SymbolicElem;
@@ -21,11 +21,33 @@ pub struct FunctionMetadata {
     pub args_count: i16,
 }
 
+impl fmt::Display for FunctionMetadata {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} {}", from_utf8(&self.name).unwrap(), self.args_count)
+    }
+}
+
 #[derive(Debug)]
 pub enum AsmFunctionInstruction {
     Definition(FunctionMetadata),
     Call(FunctionMetadata),
     Return,
+}
+
+impl fmt::Display for AsmFunctionInstruction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Call(meta) => {
+                write!(f, "call ")?;
+                meta.fmt(f)
+            }
+            Self::Definition(meta) => {
+                write!(f, "function ")?;
+                meta.fmt(f)
+            }
+            Self::Return => write!(f, "return"),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -35,10 +57,27 @@ pub enum AsmBranchInstructionKind {
     IfGoto,
 }
 
+impl fmt::Display for AsmBranchInstructionKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Label => write!(f, "label"),
+            Self::Goto => write!(f, "goto"),
+            Self::IfGoto => write!(f, "if-goto"),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct AsmBranchInstruction {
     pub kind: AsmBranchInstructionKind,
     pub name: Vec<u8>,
+}
+
+impl fmt::Display for AsmBranchInstruction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.kind.fmt(f)?;
+        write!(f, " {}", from_utf8(&self.name).unwrap())
+    }
 }
 
 #[derive(Hash, Debug, Clone, Copy, PartialEq, SymbolicElem)]
@@ -64,14 +103,14 @@ pub enum AsmMemoryInstructionSegment {
 impl fmt::Display for AsmMemoryInstructionSegment {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let label = match self {
-            AsmMemoryInstructionSegment::Arg => "argument",
-            AsmMemoryInstructionSegment::Const => "constant",
-            AsmMemoryInstructionSegment::Pointer => "pointer",
-            AsmMemoryInstructionSegment::Static => "static",
-            AsmMemoryInstructionSegment::Local => "local",
-            AsmMemoryInstructionSegment::Temp => "temp",
-            AsmMemoryInstructionSegment::That => "that",
-            AsmMemoryInstructionSegment::This => "this",
+            Self::Arg => "argument",
+            Self::Const => "constant",
+            Self::Pointer => "pointer",
+            Self::Static => "static",
+            Self::Local => "local",
+            Self::Temp => "temp",
+            Self::That => "that",
+            Self::This => "this",
         };
 
         write!(f, "{}", label)
@@ -87,8 +126,8 @@ pub enum AsmMemoryInstructionKind {
 impl fmt::Display for AsmMemoryInstructionKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let label = match self {
-            AsmMemoryInstructionKind::Pop => "pop",
-            AsmMemoryInstructionKind::Push => "push",
+            Self::Pop => "pop",
+            Self::Push => "push",
         };
 
         write!(f, "{}", label)
@@ -133,15 +172,15 @@ pub enum AsmArithmeticInstruction {
 impl fmt::Display for AsmArithmeticInstruction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let label = match self {
-            AsmArithmeticInstruction::Add => "add",
-            AsmArithmeticInstruction::Sub => "sub",
-            AsmArithmeticInstruction::Neg => "neg",
-            AsmArithmeticInstruction::Eq => "eq",
-            AsmArithmeticInstruction::Gt => "gt",
-            AsmArithmeticInstruction::Lt => "lt",
-            AsmArithmeticInstruction::And => "and",
-            AsmArithmeticInstruction::Or => "or",
-            AsmArithmeticInstruction::Not => "not",
+            Self::Add => "add",
+            Self::Sub => "sub",
+            Self::Neg => "neg",
+            Self::Eq => "eq",
+            Self::Gt => "gt",
+            Self::Lt => "lt",
+            Self::And => "and",
+            Self::Or => "or",
+            Self::Not => "not",
         };
 
         write!(f, "{}", label)
@@ -156,11 +195,17 @@ pub enum AsmInstructionPayload {
     Function(AsmFunctionInstruction),
 }
 
+impl Default for AsmInstructionPayload {
+    fn default() -> Self {
+        Self::Arithmetic(AsmArithmeticInstruction::Add)
+    }
+}
+
 impl fmt::Display for AsmInstructionPayload {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self {
-            AsmInstructionPayload::Function(_) => Ok(()),
-            AsmInstructionPayload::Branch(_) => Ok(()),
+            AsmInstructionPayload::Function(function_instruction) => function_instruction.fmt(f),
+            AsmInstructionPayload::Branch(branch_instruction) => branch_instruction.fmt(f),
             AsmInstructionPayload::Memory(memory_instruction) => memory_instruction.fmt(f),
             AsmInstructionPayload::Arithmetic(arithmetic_instruction) => {
                 arithmetic_instruction.fmt(f)

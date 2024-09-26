@@ -1,7 +1,3 @@
-use tokio::io::{AsyncWrite, AsyncWriteExt, Result};
-
-use crate::xml::IntoXML;
-
 #[derive(Debug, PartialEq)]
 pub struct JackString(pub Vec<u8>);
 
@@ -21,14 +17,5 @@ impl JackString {
 
             l += 1;
         }
-    }
-}
-
-impl IntoXML for JackString {
-    async fn write_xml<T: AsyncWrite + Unpin>(&self, write: &mut T) -> Result<usize> {
-        let mut n = write.write(b"<stringConstant> ").await?;
-        n += write.write(&self.0).await?;
-        n += write.write(b" </stringConstant>").await?;
-        Ok(n)
     }
 }

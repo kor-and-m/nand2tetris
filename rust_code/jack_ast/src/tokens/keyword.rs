@@ -1,9 +1,6 @@
-use tokio::io::{AsyncWrite, AsyncWriteExt, Result};
-
-use crate::xml::IntoXML;
-
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Default)]
 pub enum JackKeyword {
+    #[default]
     Constructor,
     Function,
     Boolean,
@@ -28,21 +25,40 @@ pub enum JackKeyword {
 }
 
 impl JackKeyword {
+    pub fn is_var_declar(&self) -> bool {
+        match self {
+            Self::Var => true,
+            Self::Static => true,
+            Self::Field => true,
+            _ => false,
+        }
+    }
+
     pub fn is_value(&self) -> bool {
         match self {
-            JackKeyword::True => true,
-            JackKeyword::False => true,
-            JackKeyword::This => true,
-            JackKeyword::Null => true,
+            Self::True => true,
+            Self::False => true,
+            Self::This => true,
+            Self::Null => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_function(&self) -> bool {
+        match self {
+            Self::Function => true,
+            Self::Method => true,
+            Self::Constructor => true,
             _ => false,
         }
     }
 
     pub fn is_type(&self) -> bool {
         match self {
-            JackKeyword::Char => true,
-            JackKeyword::Boolean => true,
-            JackKeyword::Int => true,
+            Self::Char => true,
+            Self::Boolean => true,
+            Self::Int => true,
+            Self::Void => true,
             _ => false,
         }
     }
@@ -100,38 +116,5 @@ impl JackKeyword {
             Self::Function => 8,
             Self::Constructor => 11,
         }
-    }
-}
-
-impl IntoXML for JackKeyword {
-    async fn write_xml<T: AsyncWrite + Unpin>(&self, write: &mut T) -> Result<usize> {
-        let mut n = write.write(b"<keyword> ").await?;
-
-        n += match self {
-            Self::Constructor => write.write(b"constructor").await?,
-            Self::Function => write.write(b"function").await?,
-            Self::Boolean => write.write(b"boolean").await?,
-            Self::Method => write.write(b"method").await?,
-            Self::Static => write.write(b"static").await?,
-            Self::Return => write.write(b"return").await?,
-            Self::Class => write.write(b"class").await?,
-            Self::Field => write.write(b"field").await?,
-            Self::False => write.write(b"false").await?,
-            Self::While => write.write(b"while").await?,
-            Self::Char => write.write(b"char").await?,
-            Self::Void => write.write(b"void").await?,
-            Self::True => write.write(b"true").await?,
-            Self::Null => write.write(b"null").await?,
-            Self::This => write.write(b"this").await?,
-            Self::Else => write.write(b"else").await?,
-            Self::Var => write.write(b"var").await?,
-            Self::Int => write.write(b"int").await?,
-            Self::Let => write.write(b"let").await?,
-            Self::If => write.write(b"if").await?,
-            Self::Do => write.write(b"do").await?,
-        };
-
-        n += write.write(b" </keyword>").await?;
-        Ok(n)
     }
 }

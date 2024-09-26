@@ -1,0 +1,30 @@
+class Main {
+    field int x2;
+    field Array a;
+
+    constructor Main new() {
+        let x2 = 3;
+        let a = Array.new();
+
+        while (x2 > 2) {
+            let x2 = 1;
+        }
+
+        let x2 = 0;
+
+        return this;
+    }
+
+    method void gg(Arr k, Game g) {
+        var int n;
+
+        let n = 5;
+        let k[10] = A.save(Array.new(12) + (g.new(a[3 + 8]) + -66 * (72 - x2 - n)));
+        do build(6);
+        return;
+    }
+
+    method void build(int k) {
+        return;
+    }
+}

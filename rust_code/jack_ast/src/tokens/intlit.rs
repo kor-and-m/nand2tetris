@@ -1,7 +1,3 @@
-use tokio::io::{AsyncWrite, AsyncWriteExt, Result};
-
-use crate::xml::IntoXML;
-
 #[derive(Debug, PartialEq)]
 pub struct JackInt(pub Vec<u8>);
 
@@ -25,16 +21,21 @@ impl JackInt {
         }
     }
 
+    pub fn to_int(&self) -> i16 {
+        let l = self.0.len();
+
+        if l > 5 {
+            panic!("Too big int token");
+        }
+
+        let mut sum = 0;
+        for i in 0..l {
+            sum += (self.0[l - 1 - i] as i16 - 48) * 10_i32.pow(i as u32) as i16;
+        }
+        sum
+    }
+
     pub fn is_int_char(c: u8) -> bool {
         c > 47 && c < 58
-    }
-}
-
-impl IntoXML for JackInt {
-    async fn write_xml<T: AsyncWrite + Unpin>(&self, write: &mut T) -> Result<usize> {
-        let mut n = write.write(b"<integerConstant> ").await?;
-        n += write.write(&self.0).await?;
-        n += write.write(b" </integerConstant>").await?;
-        Ok(n)
     }
 }

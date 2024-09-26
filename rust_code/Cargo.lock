@@ -211,6 +211,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d231dfb89cfffdbc30e7fc41579ed6066ad03abda9e567ccafae602b97ec5024"
 
 [[package]]
+name = "inflections"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a257582fdcde896fd96463bf2d40eefea0580021c0712a0e2b028b60b47a837a"
+
+[[package]]
 name = "jack_ast"
 version = "0.1.0"
 dependencies = [
@@ -219,6 +225,7 @@ dependencies = [
  "file_context",
  "futures",
  "futures-util",
+ "inflections",
  "tokio",
  "tokio-stream",
  "tokio-util",
@@ -228,8 +235,10 @@ dependencies = [
 name = "jack_compiler"
 version = "0.1.0"
 dependencies = [
+ "futures",
  "jack_ast",
  "tokio",
+ "vm_parser",
 ]
 
 [[package]]

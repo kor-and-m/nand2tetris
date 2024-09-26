@@ -1,7 +1,3 @@
-use tokio::io::{AsyncWrite, AsyncWriteExt, Result};
-
-use crate::xml::IntoXML;
-
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum JackSymbol {
     OpenCurlyBracket,
@@ -72,36 +68,5 @@ impl JackSymbol {
             b'~' => Some(Self::Not),
             _ => None,
         }
-    }
-}
-
-impl IntoXML for JackSymbol {
-    async fn write_xml<T: AsyncWrite + Unpin>(&self, write: &mut T) -> Result<usize> {
-        let mut n = write.write(b"<symbol> ").await?;
-
-        n += match self {
-            Self::OpenRoundBracket => write.write(b"(").await?,
-            Self::CloseRoundBracket => write.write(b")").await?,
-            Self::OpenCurlyBracket => write.write(b"{").await?,
-            Self::CloseCurlyBracket => write.write(b"}").await?,
-            Self::OpenSquareBracket => write.write(b"[").await?,
-            Self::CloseSquareBracket => write.write(b"]").await?,
-            Self::Period => write.write(b".").await?,
-            Self::Comma => write.write(b",").await?,
-            Self::Semicolon => write.write(b";").await?,
-            Self::Plus => write.write(b"+").await?,
-            Self::Minus => write.write(b"-").await?,
-            Self::Multiply => write.write(b"*").await?,
-            Self::Divide => write.write(b"/").await?,
-            Self::And => write.write(b"&amp;").await?,
-            Self::Or => write.write(b"|").await?,
-            Self::Less => write.write(b"&lt;").await?,
-            Self::Greater => write.write(b"&gt;").await?,
-            Self::Eq => write.write(b"=").await?,
-            Self::Not => write.write(b"~").await?,
-        };
-
-        n += write.write(b" </symbol>").await?;
-        Ok(n)
     }
 }

@@ -1,4 +1,6 @@
-#[derive(Debug)]
+use std::mem;
+
+#[derive(Debug, PartialEq)]
 pub struct FileDataLocation {
     pub from: usize,
     pub size: usize,
@@ -10,7 +12,7 @@ impl FileDataLocation {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct FileSpan {
     pub line: usize,
     pub symbol: usize,
@@ -22,7 +24,7 @@ impl FileSpan {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Default)]
 pub struct FileContext<Payload> {
     pub idx: usize,
     pub location: Option<FileDataLocation>,
@@ -43,5 +45,13 @@ impl<Payload> FileContext<Payload> {
             span,
             payload,
         }
+    }
+}
+
+impl<Payload: Default> FileContext<Payload> {
+    pub fn from_old(old: &mut Self) -> Self {
+        let mut context = Self::default();
+        mem::swap(old, &mut context);
+        context
     }
 }
