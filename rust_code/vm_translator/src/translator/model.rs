@@ -57,7 +57,6 @@ pub struct Translator<'a> {
     cursor_link: usize,
     cursor_down: usize,
     translate_opts: TranslateOpts,
-    instruction_counter: usize,
 }
 
 impl<'a> Translator<'a> {
@@ -93,7 +92,6 @@ impl<'a> Translator<'a> {
             tokens_cursor_down: 0,
             cursor_link: 0,
             cursor_down: 0,
-            instruction_counter: 0,
             translate_opts: opts,
         }
     }
@@ -113,12 +111,12 @@ impl<'a> Translator<'a> {
                 InstructionOrLink::L(l) => {
                     let r = &l[self.cursor_link];
                     self.cursor_link += 1;
-                    
+
                     if self.cursor_link == l.len() {
                         self.cursor_down += 1;
                         self.cursor_link = 0;
                     }
-    
+
                     r
                 }
             };
@@ -155,23 +153,19 @@ impl<'a> Translator<'a> {
         file_context: &mut WriteFileContext,
     ) -> usize {
         let mut res = 0;
-        let n = file_context.global_instruction_number(self.instruction_counter);
 
         for _idx in 0..chunk {
+            let n = file_context.global_instruction_number();
             res += if let Some(i) = self.next_instruction() {
-                let (mut l, maybe_val_to_save) = i.write_bytes(
-                    &mut buff[res..],
-                    static_pointer,
-                    n,
-                    static_map
-                );
+                let (mut l, maybe_val_to_save) =
+                    i.write_bytes(&mut buff[res..], static_pointer, n, static_map);
 
                 if let Some(val_to_save) = maybe_val_to_save {
-                    file_context.set_intruction(val_to_save, self.instruction_counter)
+                    file_context.set_intruction(val_to_save)
                 }
 
                 if l != 0 {
-                    self.instruction_counter += 1;
+                    file_context.incr();
                     buff[res + l] = b'\n';
                     l += 1;
                 }

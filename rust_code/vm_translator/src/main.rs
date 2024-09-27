@@ -70,7 +70,7 @@ async fn main() -> io::Result<()> {
         } else {
             translator.instructions_to_symbols(&mut buff, 100)
         };
-        file_context.set_new_pointer(f_write.write(&mut buff[..l]).await.unwrap());
+        f_write.write(&mut buff[..l]).await.unwrap();
 
         let mut paths = read_dir(PATH_TO_BIFS).await.unwrap();
 
@@ -131,7 +131,7 @@ async fn main() -> io::Result<()> {
 
     for (label, idxs) in file_context.pointer_map.iter() {
         for idx in idxs {
-            f2_write.seek(io::SeekFrom::Start(*idx as u64)).await?;
+            f2_write.seek(io::SeekFrom::Start(*idx as u64 * 17)).await?;
             let value = static_map.get(label).unwrap();
             f2_write.write(value.as_bytes()).await?;
         }
@@ -217,7 +217,6 @@ async fn write_chunks(
     static_map: &mut HashMap<Vec<u8>, String>,
     file_pointer: &mut WriteFileContext,
 ) -> io::Result<()> {
-    let mut sum = 0;
     loop {
         let l = if binary_target {
             translator.instructions_to_bytes(buff, 100, static_pointer, static_map, file_pointer)
@@ -229,8 +228,7 @@ async fn write_chunks(
             break;
         }
 
-        sum += f_write.write(&mut buff[..l]).await.unwrap();
+        f_write.write(&mut buff[..l]).await.unwrap();
     }
-    file_pointer.set_new_pointer(sum);
     Ok(())
 }

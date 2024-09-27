@@ -174,7 +174,9 @@ impl<'a> JackSubroutineCompilerContext<'a> {
         }
 
         if let Some(var) = self.class.vars.get(name) {
-            if self.subroutine.key == JackSubroutineType::Function && var.segment == JackSegment::Field {
+            if self.subroutine.key == JackSubroutineType::Function
+                && var.segment == JackSegment::Field
+            {
                 return None;
             }
 

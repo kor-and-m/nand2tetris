@@ -72,7 +72,7 @@ impl HelperInstruction<'_> {
                     buff[..16].copy_from_slice(value.as_bytes());
                     (16, None)
                 } else {
-                    buff[..16].copy_from_slice(b"1000000000000000");
+                    buff[..16].copy_from_slice(b"xxxxxxxxxxxxxxxx");
                     (16, Some(v))
                 }
             }
@@ -83,7 +83,7 @@ impl HelperInstruction<'_> {
                     buff[..16].copy_from_slice(value.as_bytes());
                     (16, None)
                 } else {
-                    buff[..16].copy_from_slice(b"1000000000000000");
+                    buff[..16].copy_from_slice(b"yyyyyyyyyyyyyyyy");
                     (16, Some(v))
                 }
             }

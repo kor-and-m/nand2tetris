@@ -14,18 +14,18 @@ impl WriteFileContext {
         }
     }
 
-    pub fn set_new_pointer(&mut self, pointer: usize) {
-        self.pointer += pointer;
+    pub fn global_instruction_number(&self) -> usize {
+        self.pointer
     }
 
-    pub fn global_instruction_number(&self, instruction_idx: usize) -> usize {
-        self.pointer / 17 + instruction_idx
+    pub fn incr(&mut self) {
+        self.pointer += 1;
     }
 
-    pub fn set_intruction(&mut self, instruction: Vec<u8>, instruction_idx: usize) {
+    pub fn set_intruction(&mut self, instruction: Vec<u8>) {
         self.pointer_map
             .entry(instruction)
             .or_insert(Vec::new())
-            .push(self.pointer + instruction_idx * 17)
+            .push(self.pointer)
     }
 }
