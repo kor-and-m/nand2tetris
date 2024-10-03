@@ -18,7 +18,7 @@ use super::{
 };
 
 const TRANSLATOR_INSTRUCTIONS_CAPACITY: usize = 2048;
-const TRANSLATOR_TOKEN_CAPACITY: usize = 128;
+const TRANSLATOR_TOKEN_CAPACITY: usize = 64;
 const INIT_SP: [Instruction<'static>; 4] = [
     instruction!(b"@256"),
     instruction!(b"D=A"),
